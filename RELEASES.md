@@ -82,6 +82,7 @@ adapter set. The following limits remain deferred:
 - Added v2 `OrderFillVoided`, `OrderStatus.VOIDED`, terminal voiding, and strategy and algorithm callbacks
 - Added Python v2 controller subclassing and importable controller configs for backtest/live
 - Added Python v2 subclassable execution algorithms for routed orders
+- Added Python v2 `ExecutionAlgorithm.deny_order` with terminal denial of invalid TWAP inputs
 - Added Python v2 `ExecutionAlgorithm` portfolio, lifecycle, signals, and constructed live registration
 - Added Python v2 `BacktestNode` post-run cache, portfolio, statistics, and report inspection
 - Added Python v2 `LiveNode` cache and portfolio inspection with bounded host-loop polling
@@ -399,6 +400,7 @@ adapter set. The following limits remain deferred:
 - Fixed v2 quadratic NETTING backtest CPU and memory growth from position replay logs retained in snapshot blobs and per-fill account event-log clones (#4546), thanks @HungNgo4444
 
 ### Internal Improvements
+- Standardized Rust adapter task‑handle storage with `TaskHandles` while retaining client‑local spawn and shutdown policies
 - Added Binance SAPI base URL and path constants for upcoming margin support (#4447), thanks @akashchakrabortymsc-cmd
 - Made portfolio reference-count clones explicit (#4364), thanks @ChrisAB
 - Improved Clippy compatibility for nightly and all-feature Rust builds (#4505), thanks @folknor
