@@ -17,8 +17,7 @@ jobs:
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.3
         with:
           target_repo_token: ${{ secrets.GITHUB_TOKEN }}
-          target_branch: develop
-          upstream_repo_owner: nautechsystems
-          upstream_repo: nautilus_trader
-          upstream_branch: develop
+          target_sync_branch: develop
+          upstream_sync_repo: nautechsystems/nautilus_trader
+          upstream_sync_branch: develop
           test_mode: false
