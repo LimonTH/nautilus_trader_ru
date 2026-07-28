@@ -158,6 +158,8 @@ adapter set. The following limits remain deferred:
 - Fixed `CVec` ownership and FFI reconstruction issues that could cause undefined behavior (#4499), thanks @folknor
 
 ### Fixes
+- Fixed v2 clock `set_time_alert` and `set_timer` panicking on pre-epoch or out-of-range `DateTime` inputs
+- Fixed v2 clock past-alert warning logging the adjusted time instead of the original alert time
 - Fixed v2 PyO3 API coverage and Python exception handling
 - Fixed `nautilus database init` panicking instead of skipping existing schema objects on re-run
 - Fixed `nautilus database init` leaving schema objects owned by the bootstrap administrator
@@ -403,6 +405,7 @@ adapter set. The following limits remain deferred:
 - Fixed Tardis replay trades directory to `trades/` (#4373), thanks @AdvancedUno
 - Fixed v2 sandbox execution retaining matching engines and cache state for expired quote-only instruments
 - Fixed v2 quadratic NETTING backtest CPU and memory growth from position replay logs retained in snapshot blobs and per-fill account event-log clones (#4546), thanks @HungNgo4444
+- Fixed Rust `Throttler` stranding buffered messages after a rejected `try_reserve`, breaking drain order
 
 ### Internal Improvements
 - Standardized Rust adapter task‑handle storage with `TaskHandles` while retaining client‑local spawn and shutdown policies
@@ -443,6 +446,7 @@ adapter set. The following limits remain deferred:
 - Updated Architect AX integration docs for current market-data, REST schema, and funding-rate behavior
 - Updated Lighter integration docs for sequential order fanout and reconciliation limits
 - Updated Polymarket v2 examples and integration docs for current markets, order modes, and configuration
+- Added `managed` parameter docs for `DataActor` book subscriptions (#4589), thanks @sbOogway
 - Fixed PyO3 docstring generation for attributes with trailing comments
 - Fixed Lighter get-started Python v2 development wheel link
 
