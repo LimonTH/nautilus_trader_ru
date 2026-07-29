@@ -85,6 +85,7 @@ adapter set. The following limits remain deferred:
 - Added Python v2 `ExecutionAlgorithm.deny_order` with terminal denial of invalid TWAP inputs
 - Added Python v2 `ExecutionAlgorithm` portfolio, lifecycle, signals, and constructed live registration
 - Added Python v2 `BacktestNode` post-run cache, portfolio, statistics, and report inspection
+- Added v2 tearsheet support for `BacktestResult` input (#4563), thanks @faysou
 - Added Python v2 `LiveNode` cache and portfolio inspection with bounded host-loop polling
 - Added Python v2 `LiveNode.add_strategy` for constructed strategy instances (#4487), thanks @dfjmax
 - Added Python v2 `FeeModel` and `FillModel` subclass support for custom backtest models
@@ -166,6 +167,9 @@ adapter set. The following limits remain deferred:
 - Fixed v2 clock `set_time_alert` and `set_timer` panicking on pre-epoch or out-of-range `DateTime` inputs
 - Fixed v2 clock past-alert warning logging the adjusted time instead of the original alert time
 - Fixed v2 PyO3 API coverage and Python exception handling
+- Fixed v2 result tearsheets to reject disposed node state
+- Fixed v2 result tearsheets reporting the backtest range instead of the wall‑clock run duration
+- Fixed v2 result tearsheets to filter PnL and account balances by currency
 - Fixed `nautilus database init` panicking instead of skipping existing schema objects on re-run
 - Fixed `nautilus database init` leaving schema objects owned by the bootstrap administrator
 - Fixed the v2 SQL schema loader splitting dollar-quoted (`$$`) statement bodies on their inner semicolons
@@ -393,6 +397,7 @@ adapter set. The following limits remain deferred:
 - Fixed Interactive Brokers Rust adapter conflating socket connectivity with data-farm health (#4457), thanks @faysou
 - Fixed Interactive Brokers Rust data feeds waiting on every farm before restarting recovered services (#4469), thanks @faysou
 - Fixed Kraken Futures batch order `order_tag` serialization (#4459), thanks @Andreas197510
+- Fixed Kraken Futures fill parsing for all documented `fillType` values (#4591), thanks for reporting @Andreas197510
 - Fixed Kraken financial values losing precision through floating-point parsing and arithmetic
 - Fixed Lighter batch orders to use correlated sequential WebSocket transactions
 - Fixed Lighter reconciliation cursor loops, fill deduplication, and trailing fill identity
@@ -432,7 +437,7 @@ adapter set. The following limits remain deferred:
 - Improved adapter test runtime for Architect AX (#4554), BitMEX (#4555), and Bybit (#4553), thanks @folknor
 - Upgraded Binance Spot SBE REST and WebSocket API requests to schema `3:5` (Rust)
 - Upgraded Rust (MSRV) to 1.97.1
-- Upgraded Cython to v3.2.8
+- Upgraded Cython to v3.2.9
 - Upgraded Cap'n Proto to v1.5.0
 - Upgraded `capnp` crate to v0.26.2
 - Upgraded `databento` crate to v0.55.0
@@ -440,11 +445,13 @@ adapter set. The following limits remain deferred:
 - Upgraded `ed25519-dalek` crate to v3.0.0
 - Upgraded `futures` crate to v0.3.33
 - Upgraded `redis` crate to v1.4.1
+- Upgraded `sockudo-ws` crate to v2.0.1
 - Upgraded `tokio` crate to v1.53.1
 - Upgraded `tokio-tungstenite` crate to v0.30.0
 - Upgraded `pyarrow` to v25.0.0
 
 ### Documentation Updates
+- Added v2 `BacktestResult` tearsheet lifecycle and currency filter guidance
 - Updated Bybit v2 spot margin auto-repayment behavior and configuration
 - Added the v1-to-v2 property, method, and callback migration matrix
 - Added canonical references and doc comments for portfolio statistics
