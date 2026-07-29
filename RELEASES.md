@@ -178,6 +178,7 @@ adapter set. The following limits remain deferred:
 - Fixed v2 realized PnL returning zero for missing rates or range errors and panicking on overflow
 - Fixed v2 realized PnL counting only the newest snapshot for NETTING positions with three or more cycles (v1 parity)
 - Fixed v2 realized PnL miscounting archived NETTING cycles whose boundaries a prior-cycle fill void moved
+- Fixed v2 duplicate replayed fills reopening a flat position and panicking on a later fill void replay
 - Fixed v2 portfolio snapshots retaining stale-price flags after the affected position side closed
 - Fixed v2 portfolio snapshots dropping temporarily unpriced positions and hiding stale valuations
 - Fixed v2 equity curves omitting unrealized PnL between fills (#3899), thanks for reporting @q-learning-trader
@@ -351,6 +352,7 @@ adapter set. The following limits remain deferred:
 - Fixed Derive historical bar timestamps and forming-bucket filtering
 - Fixed Derive instrument loading for absent product types and malformed rows
 - Fixed Derive fill reconciliation dropping fills on retry
+- Fixed Derive mass status flattening held positions when quantity conversion fails
 - Fixed Derive null cancel acknowledgements being reported as failures
 - Fixed Derive cancel, replace, nonce failures, and non-positive `max_fee_per_contract` configs
 - Fixed Derive shared channel ownership, unsubscribe races, and stale quote caches
@@ -368,6 +370,7 @@ adapter set. The following limits remain deferred:
 - Fixed OKX price-limit metadata parsing and public limit-price requests (#4413)
 - Fixed Polymarket auto-loaded instruments not reaching WebSocket subscription (#4574), thanks for reporting @nietoga
 - Fixed Polymarket RTDS retained-subscription recovery after reconnects (#4353), thanks @graceyangfan
+- Fixed Polymarket v2 fee schedules and RTDS equity snapshot handling
 - Fixed Polymarket Gamma market and event keyset filters, validation, and repeated query encoding
 - Fixed Polymarket Gamma discovery to use keyset pagination beyond the legacy offset cap
 - Fixed Polymarket v2 order cancellation during shutdown so accepted venue orders are not left open
@@ -646,6 +649,16 @@ This release includes many breaking changes across the user-facing Python and Ru
 - Fixed event-store capture duplicating order events, commands, and account states across dispatch hops (Rust)
 - Fixed event-store snapshot-anchor validation across the verifier, retention, and restore paths (Rust)
 - Fixed event-store replay, scan, marker, and halt-signal edge cases around skipped events, gaps, and reruns (Rust)
+- Fixed event-store capture duplicating `DataCommand` dispatches across the queue and execute endpoints (Rust)
+- Fixed event-store capture losing a message when its encoder failed before the last dispatch hop (Rust)
+- Fixed event-store `MemoryBackend` silently replacing a sealed run on a same-id reopen (Rust)
+- Fixed event-store reads accepting entries whose embedded `seq` disagreed with the redb table key (Rust)
+- Fixed event-store replay claiming a full apply when a fill's position could not open (Rust)
+- Fixed event-store replay fill guard to mirror live duplicate-fill semantics for flat positions (Rust)
+- Fixed event-store run listing and retention planning depending on filesystem order for equal start times (Rust)
+- Fixed event-store `verify` dropping entry findings when the marker sidecar scan failed (Rust)
+- Fixed event-store verifier aborting the whole scan on one undecodable entry instead of reporting it (Rust)
+- Fixed event-store writer halt firing twice across stall and backend failures and accepting post-halt submits (Rust)
 - Fixed HTTP client errors discarding the underlying cause from the reqwest source chain (Rust)
 - Fixed `HttpClient` rejecting invalid response header keys instead of silently dropping them (Rust)
 - Fixed `Instrument` rejecting negative `min_price`, preventing spread instruments from loading in Python
