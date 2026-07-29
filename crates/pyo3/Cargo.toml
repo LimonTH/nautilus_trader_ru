@@ -161,6 +161,7 @@ nautilus-okx = { workspace = true, features = ["python"] }
 nautilus-polymarket = { workspace = true, features = ["python"] }
 nautilus-sandbox = { workspace = true, features = ["python"] }
 nautilus-tardis = { workspace = true, features = ["python", "replay"] }
+nautilus-tinvest = { workspace = true, features = ["python"] }
 
 # local_dynamic_tls avoids exhausting static TLS space when the extension is dlopen'd
 mimalloc = { workspace = true, features = [

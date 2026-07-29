@@ -1,0 +1,108 @@
+[package]
+name = "nautilus-tinvest"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "T-Invest (MOEX) integration adapter for the Nautilus trading engine"
+categories.workspace = true
+keywords.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[lib]
+name = "nautilus_tinvest"
+crate-type = ["rlib"]
+
+[features]
+default = ["execution"]
+execution = []
+examples = ["nautilus-live/node", "nautilus-trading/examples"]
+extension-module = [
+  "nautilus-common/extension-module",
+  "nautilus-core/extension-module",
+  "nautilus-execution/extension-module",
+  "nautilus-live/extension-module",
+  "nautilus-model/extension-module",
+  "nautilus-network/extension-module",
+  "pyo3/extension-module",
+  "python",
+]
+python = [
+  "execution",
+  "dep:nautilus-system",
+  "nautilus-common/python",
+  "nautilus-core/python",
+  "nautilus-execution/python",
+  "nautilus-live/python",
+  "nautilus-model/python",
+  "nautilus-network/python",
+  "nautilus-system/python",
+  "pyo3",
+  "pyo3-async-runtimes",
+  "pyo3-stub-gen",
+]
+
+[package.metadata.cargo-machete]
+ignored = [
+  "nautilus-execution",
+  "nautilus-network",
+]
+
+[package.metadata.docs.rs]
+features = ["examples", "execution"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[dependencies]
+nautilus-common = { workspace = true, features = ["live"] }
+nautilus-core = { workspace = true }
+nautilus-execution = { workspace = true }
+nautilus-live = { workspace = true }
+nautilus-model = { workspace = true }
+
+nautilus-network = { workspace = true, optional = true }
+nautilus-system = { workspace = true, optional = true }
+
+ahash = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+rust_decimal = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+ustr = { workspace = true }
+
+tonic = { workspace = true, features = ["prost", "codegen"] }
+prost = { version = "0.13.5", default-features = false, features = ["std"] }
+prost-types = { version = "0.13.5", default-features = false }
+tokio-stream = { version = "0.1.17", default-features = false, features = ["sync"] }
+
+pyo3 = { workspace = true, optional = true }
+pyo3-async-runtimes = { workspace = true, optional = true }
+pyo3-stub-gen = { workspace = true, optional = true }
+
+[build-dependencies]
+tonic-build = { version = "0.13.1", default-features = false, features = ["transport", "prost"] }
+
+[dev-dependencies]
+nautilus-testkit = { workspace = true }
+nautilus-trading = { workspace = true }
+rstest = { workspace = true }
+rust_decimal_macros = { workspace = true }
+tempfile = { workspace = true }
+
+[[test]]
+name = "python"
+path = "tests/python.rs"
+required-features = ["python"]

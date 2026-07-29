@@ -45,6 +45,7 @@ VENUE_ADAPTERS = {
     "lighter": "LIGHTER",
     "okx": "OKX",
     "polymarket": "POLYMARKET",
+    "tinvest": "TINVEST",
 }
 
 NON_VENUE_ADAPTERS = sorted(set(ADAPTERS) - set(VENUE_ADAPTERS))
@@ -182,5 +183,6 @@ def test_known_adapter_set_is_complete():
         "polymarket",
         "sandbox",
         "tardis",
+        "tinvest",
     }
     assert set(ADAPTERS) == expected

@@ -64,7 +64,11 @@ strip = false
 include = ["**/*.pyi"]
 
 [tool.uv]
+<<<<<<< Updated upstream
 required-version = "==0.11.33"
+=======
+required-version = ">=0.11.29"
+>>>>>>> Stashed changes
 exclude-newer = "3 days"
 # These releases received an extra audit before bypassing the default cooldown.
 exclude-newer-package = { plotly = "8 hours", ruff = "8 hours", tzdata = "8 hours" }

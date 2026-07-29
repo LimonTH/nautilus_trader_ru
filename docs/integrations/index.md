@@ -5,7 +5,7 @@ NautilusTrader uses modular *adapters* to connect to trading venues and data pro
 The following integrations are currently supported:
 
 | Name                                                      | ID                    | Type                    | Status                                               | Docs                     |
-| :-------------------------------------------------------- | :-------------------- | :---------------------- | :--------------------------------------------------- | :----------------------- |
+|:----------------------------------------------------------|:----------------------|:------------------------|:-----------------------------------------------------|:-------------------------|
 | [AX Exchange](https://architect.exchange)                 | `AX`                  | Derivatives Exchange    | ![status](https://img.shields.io/badge/stable-green) | [Guide](architect_ax.md) |
 | [Betfair](https://betfair.com)                            | `BETFAIR`             | Sports Betting Exchange | ![status](https://img.shields.io/badge/stable-green) | [Guide](betfair.md)      |
 | [Binance](https://binance.com)                            | `BINANCE`             | Crypto Exchange (CEX)   | ![status](https://img.shields.io/badge/stable-green) | [Guide](binance.md)      |
@@ -23,7 +23,9 @@ The following integrations are currently supported:
 | [Kraken](https://kraken.com)                              | `KRAKEN`              | Crypto Exchange (CEX)   | ![status](https://img.shields.io/badge/stable-green) | [Guide](kraken.md)       |
 | [OKX](https://okx.com)                                    | `OKX`                 | Crypto Exchange (CEX)   | ![status](https://img.shields.io/badge/stable-green) | [Guide](okx.md)          |
 | [Polymarket](https://polymarket.com)                      | `POLYMARKET`          | Prediction Market (DEX) | ![status](https://img.shields.io/badge/stable-green) | [Guide](polymarket.md)   |
+| [T-Invest](https://www.tinkoff.ru/invest/)                | `TINVEST`             | Brokerage (MOEX)        | ![status](https://img.shields.io/badge/stable-green) | [Guide](tinvest.md)      |
 | [Tardis](https://tardis.dev)                              | `TARDIS`              | Crypto Data Provider    | ![status](https://img.shields.io/badge/stable-green) | [Guide](tardis.md)       |
+| [T-Invest](https://developer.tbank.ru/invest/intro/intro) | `TINVEST`             | Brokerage (MOEX)        | ![status](https://img.shields.io/badge/stable-green) | [Guide](tinvest.md)      |
 
 - **ID**: The default client ID for the integrations adapter clients.
 - **Type**: The type of integration (often the venue type).

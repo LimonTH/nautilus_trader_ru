@@ -78,7 +78,7 @@ third-party adapter, please file a minimal reproducible example against the
 The following adapters are maintained in the core repository:
 
 | Adapter             | Type           |
-| ------------------- | -------------- |
+|---------------------|----------------|
 | Architect (AX)      | Data/Execution |
 | Betfair             | Data/Execution |
 | Binance             | Data/Execution |
@@ -98,6 +98,7 @@ The following adapters are maintained in the core repository:
 | Polymarket          | Data/Execution |
 | Sandbox             | Execution      |
 | Tardis              | Data           |
+| T-Invest            | Data/Execution |
 
 ## Community listings
 
@@ -125,7 +126,7 @@ listing criteria or misrepresents its relationship to NautilusTrader.
 Community adapters are externally maintained and are not supported by NautilusTrader maintainers.
 
 | Project                                      | Description                                | Maintainer   |
-| -------------------------------------------- | ------------------------------------------ | ------------ |
+|----------------------------------------------|--------------------------------------------|--------------|
 | [mt5-connect][mt5-connect]                   | MetaTrader 5 adapter.                      | aulekator    |
 | [sinopac-nt-community][sinopac-nt-community] | SinoPac Securities Taiwan markets adapter. | Martingale42 |
 

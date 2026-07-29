@@ -9,13 +9,13 @@
 [![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?logo=discord&logoColor=white)](https://discord.gg/NautilusTrader)
 
 | Branch    | Version                                                                                                                                                                                                                     | Status                                                                                                                                                                                            |
-| :-------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+|:----------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `master`  | [![version](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnautechsystems%2Fnautilus_trader%2Fmaster%2Fversion.json)](https://packages.nautechsystems.io/simple/nautilus-trader/index.html)  | [![build](https://github.com/nautechsystems/nautilus_trader/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/nautechsystems/nautilus_trader/actions/workflows/build.yml)  |
 | `nightly` | [![version](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnautechsystems%2Fnautilus_trader%2Fnightly%2Fversion.json)](https://packages.nautechsystems.io/simple/nautilus-trader/index.html) | [![build](https://github.com/nautechsystems/nautilus_trader/actions/workflows/build.yml/badge.svg?branch=nightly)](https://github.com/nautechsystems/nautilus_trader/actions/workflows/build.yml) |
 | `develop` | [![version](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnautechsystems%2Fnautilus_trader%2Fdevelop%2Fversion.json)](https://packages.nautechsystems.io/simple/nautilus-trader/index.html) | [![build](https://github.com/nautechsystems/nautilus_trader/actions/workflows/build.yml/badge.svg?branch=develop)](https://github.com/nautechsystems/nautilus_trader/actions/workflows/build.yml) |
 
 | Platform           | Rust   | Python    |
-| :----------------- | :----- | :-------- |
+|:-------------------|:-------|:----------|
 | `Linux (x86_64)`   | 1.97.1 | 3.12-3.14 |
 | `Linux (ARM64)`    | 1.97.1 | 3.12-3.14 |
 | `macOS (ARM64)`    | 1.97.1 | 3.12-3.14 |
@@ -104,7 +104,7 @@ and data providers by translating their raw APIs into a unified interface and no
 The following integrations are currently supported; see [docs/integrations/](https://nautilustrader.io/docs/latest/integrations/) for details:
 
 | Name                                                      | ID                    | Type                    | Status                                               | Docs                                       |
-| :-------------------------------------------------------- | :-------------------- | :---------------------- | :--------------------------------------------------- | :----------------------------------------- |
+|:----------------------------------------------------------|:----------------------|:------------------------|:-----------------------------------------------------|:-------------------------------------------|
 | [AX Exchange](https://architect.exchange)                 | `AX`                  | Perpetuals Exchange     | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/architect_ax.md) |
 | [Betfair](https://betfair.com)                            | `BETFAIR`             | Sports Betting Exchange | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/betfair.md)      |
 | [Binance](https://binance.com)                            | `BINANCE`             | Crypto Exchange (CEX)   | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/binance.md)      |
@@ -121,7 +121,9 @@ The following integrations are currently supported; see [docs/integrations/](htt
 | [Lighter](https://lighter.xyz)                            | `LIGHTER`             | Crypto Exchange (DEX)   | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/lighter.md)      |
 | [OKX](https://okx.com)                                    | `OKX`                 | Crypto Exchange (CEX)   | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/okx.md)          |
 | [Polymarket](https://polymarket.com)                      | `POLYMARKET`          | Prediction Market (DEX) | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/polymarket.md)   |
+| [T-Invest](https://www.tinkoff.ru/invest/)                | `TINVEST`             | Brokerage (MOEX)        | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/tinvest.md)      |
 | [Tardis](https://tardis.dev)                              | `TARDIS`              | Crypto Data Provider    | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/tardis.md)       |
+| [T-Invest](https://developer.tbank.ru/invest/intro/intro) | `TINVEST`             | Brokerage (MOEX)        | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/tinvest.md)      |
 
 - **ID**: The default client ID for the integrations adapter clients.
 - **Type**: The type of integration (often the venue type).
