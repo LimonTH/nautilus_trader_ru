@@ -92,6 +92,7 @@ adapter set. The following limits remain deferred:
 - Added Python v2 `FeeModel` and `FillModel` subclass support for custom backtest models
 - Added Python v2 `nautilus_trader.config` convenience imports for core configuration types
 - Added Python v2 `Strategy.shutdown_system()` and `LiveNode.dispose()` bindings
+- Added v2 actor and strategy state persistence across live and backtest lifecycles
 - Added Python v2 `ExecTesterConfig` controls for UUID order IDs, quote quantity, and stop-time cancels
 - Added v2 `ExecTesterConfig.close_positions_qty_precision` for venue‑fillable stop‑time closes
 - Added safe Python v2 adapter config readback for accepted fields while keeping credentials and nested configs private
@@ -129,6 +130,9 @@ adapter set. The following limits remain deferred:
 - Changed L3 books to move IDs re‑added at a new price on the same side, fixing ghost levels
 - Changed L3 books to derive price‑based order IDs for orders with a zero order ID
 - Changed Rust `BookIntegrityError` to add `AmbiguousOrderSide`; update exhaustive matches
+- Changed Rust `EncodingError` and `SbeEncodeError` to add `MixedMetadata` and `ReservedValue`;
+  update exhaustive matches
+- Changed unstable Cap'n Proto `BarSpec.step` from `UInt32` to `UInt64`
 - Changed v2 `PortfolioConfig.use_mark_prices` to prefer marks by default; set `false` to skip marks
 - Changed Rust `Cache::snapshot_position` to return `()`; use `snapshot_position_encoded` when the encoded frame is needed
 - Changed Rust time-event channels to `TimeEventMessage`; callbacks are no longer `Send + Sync` (#4496), thanks @folknor
@@ -165,6 +169,10 @@ adapter set. The following limits remain deferred:
 - Fixed `CVec` ownership and FFI reconstruction issues that could cause undefined behavior (#4499), thanks @folknor
 - Fixed DeFi `SwapTradeInfo` calculations panicking on a zero prior spot price
 - Fixed fixed-risk position sizing panics from invalid inputs, overflow, and quantity conversion (#4573), thanks @dfjmax
+- Fixed Arrow batch encoders silently re-labeling mixed metadata and leading clear deltas
+- Fixed SBE `FundingRateUpdate` maximum optional values encoding as absent
+- Fixed Cap'n Proto `Price` and `Quantity` decoding panicking on malformed precision
+- Fixed Cap'n Proto `BarSpec.step` truncating values above `u32::MAX`
 
 ### Fixes
 - Fixed order book `NoOrderSide` deltas mutating the bid side when the ID is on both book sides
@@ -379,6 +387,7 @@ adapter set. The following limits remain deferred:
 - Fixed Polymarket v2 fee schedules and RTDS equity snapshot handling
 - Fixed Polymarket Gamma market and event keyset filters, validation, and repeated query encoding
 - Fixed Polymarket Gamma discovery to use keyset pagination beyond the legacy offset cap
+- Fixed Polymarket Gamma pagination looping on repeated cursors (#4605), thanks for reporting @mystic-io
 - Fixed Polymarket v2 order cancellation during shutdown so accepted venue orders are not left open
 - Fixed Polymarket v2 book delta atomicity and local limit-price range validation
 - Fixed Polymarket v2 market WebSocket batches dropped by unknown `event_type` (#4604), thanks for reporting @mystic-io
@@ -410,6 +419,7 @@ adapter set. The following limits remain deferred:
 - Fixed Kraken Futures fill parsing for all documented `fillType` values (#4591), thanks for reporting @Andreas197510
 - Fixed Kraken financial values losing precision through floating-point parsing and arithmetic
 - Fixed Lighter batch orders to use correlated sequential WebSocket transactions
+- Fixed Lighter live funding updates exposing `funding_timestamp` as `next_funding_ns`
 - Fixed Lighter reconciliation cursor loops, fill deduplication, and trailing fill identity
 - Fixed Lighter instrument parsing, gap candle filtering, and spot quote currencies
 - Fixed Lighter modify validation, conditional acks, nonce recovery, auth refresh, and WS timeouts

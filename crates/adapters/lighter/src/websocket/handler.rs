@@ -3092,11 +3092,8 @@ mod tests {
         match &messages[2] {
             NautilusWsMessage::FundingRate(update) => {
                 assert_eq!(update.instrument_id.to_string(), "ETH-PERP.LIGHTER");
-                assert_eq!(update.rate.to_string(), "0.000001");
-                assert_eq!(
-                    update.next_funding_ns,
-                    Some(UnixNanos::from(1_774_886_400_000_000_000))
-                );
+                assert_eq!(update.rate, Decimal::new(1, 6));
+                assert_eq!(update.next_funding_ns, None);
             }
             event => panic!("expected funding rate update, was {event:?}"),
         }
@@ -3114,12 +3111,21 @@ mod tests {
         assert!(matches!(&messages[0], NautilusWsMessage::MarkPrice(_)));
         assert!(matches!(&messages[1], NautilusWsMessage::IndexPrice(_)));
         assert!(matches!(&messages[2], NautilusWsMessage::FundingRate(_)));
+
         match &messages[0] {
             NautilusWsMessage::MarkPrice(update) => {
                 assert_eq!(update.instrument_id.to_string(), "ETH-PERP.LIGHTER");
                 assert_eq!(update.value, Price::from("2064.47"));
             }
             event => panic!("expected mark price update, was {event:?}"),
+        }
+
+        match &messages[2] {
+            NautilusWsMessage::FundingRate(update) => {
+                assert_eq!(update.rate, Decimal::new(1, 6));
+                assert_eq!(update.next_funding_ns, None);
+            }
+            event => panic!("expected funding rate update, was {event:?}"),
         }
     }
 
@@ -3952,6 +3958,55 @@ mod tests {
         assert!(handler.complete_subscription(topic.as_str(), CompletionKind::ControlAck));
         assert_eq!(old_rx.await.unwrap(), Ok(()));
         assert_eq!(fresh_rx.await.unwrap(), Ok(()));
+    }
+
+    #[rstest]
+    fn second_reconnect_folds_pending_auth_into_requeued_generation() {
+        let mut handler = make_handler_with_account();
+        let channel = LighterWsChannel::AccountAllOrders(12345);
+        let topic = Ustr::from(channel.topic_key().as_str());
+        let (old_tx, mut old_rx) = tokio::sync::oneshot::channel();
+        let (fresh_tx, mut fresh_rx) = tokio::sync::oneshot::channel();
+
+        handler.queue_subscribe(channel.clone(), Some("old-token".to_string()), Some(old_tx));
+        handler.reset_subscription_attempts_after_reconnect();
+        let (_, replay_generation) = handler.pending_subs.pop_front().unwrap();
+        handler.inflight_subs.insert(topic, replay_generation);
+        handler.queue_subscribe(channel, Some("fresh-token".to_string()), Some(fresh_tx));
+
+        let attempt = &handler.subscription_attempts[&topic];
+        assert_eq!(attempt.auth.as_deref(), Some("old-token"));
+        assert_eq!(attempt.pending_auth.as_deref(), Some("fresh-token"));
+        assert_eq!(attempt.response_txs.len(), 1);
+        assert_eq!(attempt.pending_response_txs.len(), 1);
+
+        handler.reset_subscription_attempts_after_reconnect();
+
+        let attempt = &handler.subscription_attempts[&topic];
+        assert_ne!(attempt.generation, replay_generation);
+        assert_eq!(attempt.auth.as_deref(), Some("fresh-token"));
+        assert!(attempt.pending_auth.is_none());
+        assert_eq!(attempt.response_txs.len(), 2);
+        assert!(attempt.pending_response_txs.is_empty());
+        assert_eq!(handler.pending_subs.len(), 1);
+        assert_eq!(handler.pending_subs[0], (topic, attempt.generation));
+        assert!(handler.inflight_subs.is_empty());
+        assert!(matches!(
+            old_rx.try_recv(),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty),
+        ));
+        assert!(matches!(
+            fresh_rx.try_recv(),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty),
+        ));
+
+        let (_, generation) = handler.pending_subs.pop_front().unwrap();
+        handler.inflight_subs.insert(topic, generation);
+        assert!(handler.complete_subscription(topic.as_str(), CompletionKind::ControlAck));
+
+        assert_eq!(old_rx.try_recv(), Ok(Ok(())));
+        assert_eq!(fresh_rx.try_recv(), Ok(Ok(())));
+        assert!(handler.subscription_attempts.is_empty());
     }
 
     #[tokio::test]
