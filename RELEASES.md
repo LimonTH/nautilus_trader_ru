@@ -79,6 +79,7 @@ adapter set. The following limits remain deferred:
 - Added v2 `MessageBusConfig.autotrim_maxlen` for Redis stream count retention (#4433), thanks for reporting @gtalknitin
 - Added v2 `OrderBookDepth10` subscriptions and callbacks for Rust and Python actors and strategies (#4439)
 - Added Python v2 historical book-delta and depth batch callbacks for actors and strategies
+- Added Python v2 `PositionSizer` and `FixedRiskSizer` bindings (#4573), thanks @dfjmax
 - Added v2 `OrderFillVoided`, `OrderStatus.VOIDED`, terminal voiding, and strategy and algorithm callbacks
 - Added Python v2 controller subclassing and importable controller configs for backtest/live
 - Added Python v2 subclassable execution algorithms for routed orders
@@ -92,6 +93,7 @@ adapter set. The following limits remain deferred:
 - Added Python v2 `nautilus_trader.config` convenience imports for core configuration types
 - Added Python v2 `Strategy.shutdown_system()` and `LiveNode.dispose()` bindings
 - Added Python v2 `ExecTesterConfig` controls for UUID order IDs, quote quantity, and stop-time cancels
+- Added v2 `ExecTesterConfig.close_positions_qty_precision` for venue‑fillable stop‑time closes
 - Added safe Python v2 adapter config readback for accepted fields while keeping credentials and nested configs private
 - Added Python v2 Portfolio snapshot access with base-currency equity and stale/unpriced metadata
 - Added Binance Futures and OKX trailing-stop activation prices to v2 execution reports
@@ -137,6 +139,7 @@ adapter set. The following limits remain deferred:
 - Changed v2 order-event schemas to persist activation prices and fill `info`; old catalogs must be migrated
 - Changed v2 `Order.avg_px` and `Order.slippage` from `f64` to `Decimal` in Rust, and from `float` to `decimal.Decimal` in Python
 - Changed Rust `OrderStatusReport::with_avg_px` to take a `Decimal` and return `Self`; it no longer returns a `Result`
+- Changed Rust `calculate_fixed_risk_position_size` to return `Result<Quantity>`; callers must handle errors
 - Changed v2 SQL `order.avg_px` and `order.slippage` to `NUMERIC`; run `nautilus database init` before starting a Postgres-backed node, which now fails fast on the old column types
 - Changed the v2 `OrderSnapshot` Arrow schema to write `avg_px` and `slippage` as strings; the decoder also accepts the old `Float64` columns, but migrate an existing catalog rather than appending to it, since a directory holding both column types fails schema inference
 - Changed v2 instrument Arrow schemas to persist all constraints; old catalogs must be migrated
@@ -160,6 +163,8 @@ adapter set. The following limits remain deferred:
 - Fixed cross-thread `RustLocal` callback access that could cause undefined behavior (#4496), thanks @folknor
 - Fixed time-event callback teardown aborting during thread-local destruction (#4516), thanks @folknor
 - Fixed `CVec` ownership and FFI reconstruction issues that could cause undefined behavior (#4499), thanks @folknor
+- Fixed DeFi `SwapTradeInfo` calculations panicking on a zero prior spot price
+- Fixed fixed-risk position sizing panics from invalid inputs, overflow, and quantity conversion (#4573), thanks @dfjmax
 
 ### Fixes
 - Fixed order book `NoOrderSide` deltas mutating the bid side when the ID is on both book sides
@@ -354,6 +359,7 @@ adapter set. The following limits remain deferred:
 - Fixed Derive fill reconciliation dropping fills on retry
 - Fixed Derive mass status flattening held positions when quantity conversion fails
 - Fixed Derive null cancel acknowledgements being reported as failures
+- Fixed Derive zero‑match cancel‑by‑label requests not emitting `OrderCancelRejected`
 - Fixed Derive cancel, replace, nonce failures, and non-positive `max_fee_per_contract` configs
 - Fixed Derive shared channel ownership, unsubscribe races, and stale quote caches
 - Fixed Derive request pacing, write expiry, null IDs, and handler blocking during reconnects
@@ -375,6 +381,7 @@ adapter set. The following limits remain deferred:
 - Fixed Polymarket Gamma discovery to use keyset pagination beyond the legacy offset cap
 - Fixed Polymarket v2 order cancellation during shutdown so accepted venue orders are not left open
 - Fixed Polymarket v2 book delta atomicity and local limit-price range validation
+- Fixed Polymarket v2 market WebSocket batches dropped by unknown `event_type` (#4604), thanks for reporting @mystic-io
 - Fixed Polymarket v2 execution races, ambiguous submissions, trade finality, fill IDs, and proxy funder validation
 - Fixed Polymarket SELL sizing, terminal IOC remainders, and sub-cent reconciliation synthetic fills
 - Fixed Polymarket limit IOC/FOK BUY orders submitting invalid fractional-cent maker amounts
@@ -415,6 +422,7 @@ adapter set. The following limits remain deferred:
 - Fixed Polymarket Gamma pagination beyond the legacy offset cap
 - Fixed Polymarket v2 shutdown cancellation leaving accepted venue orders open
 - Fixed Polymarket v2 book delta atomicity and local price-range validation
+- Fixed Polymarket v2 exec tester close‑on‑stop requesting SELL quantities finer than venue signing permits
 - Fixed Polymarket v2 submission, finality, fill ID, and proxy funder validation races
 - Fixed Polymarket SELL sizing, IOC remainders, and sub-cent reconciliation synthetic fills
 - Fixed Tardis replay bars directory to `bars/` (#4378), thanks @AdvancedUno
