@@ -7,7 +7,7 @@ permissions: # Principle of least privilege
 on:
   push:
     # build.yml owns the shared Rust suite for test-ci-v2; v1 wheels skip that branch.
-    branches: [master, nightly, develop, test-ci, test-ci-v2, test-pre-commit]
+    branches: [master, nightly, develop, test-ci, test-ci-v2, test-pre-commit, feature-tinvest]
   pull_request:
     branches-ignore: [master, nightly]
 
