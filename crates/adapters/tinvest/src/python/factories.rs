@@ -2234,6 +2234,273 @@ impl PyTInvestGrpcClient {
         })
     }
 
+    /// Get operations by cursor with explicit pagination (F6).
+    #[pyo3(signature = (account_id, instrument_id=None, from_ts=None, to_ts=None, cursor=None, limit=100, operation_types=None, state=None, without_commissions=false, without_trades=false, without_overnights=false))]
+    pub fn get_operations_by_cursor<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        instrument_id: Option<String>,
+        from_ts: Option<i64>,
+        to_ts: Option<i64>,
+        cursor: Option<String>,
+        limit: i32,
+        operation_types: Option<Vec<i32>>,
+        state: Option<i32>,
+        without_commissions: bool,
+        without_trades: bool,
+        without_overnights: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut ops = inner.operations().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("operations service: {e}"))
+            })?;
+            let request = proto::GetOperationsByCursorRequest {
+                account_id: account_id.clone(),
+                instrument_id,
+                from: from_ts.map(|ts| prost_types::Timestamp {
+                    seconds: ts / 1_000_000_000,
+                    nanos: (ts % 1_000_000_000) as i32,
+                }),
+                to: to_ts.map(|ts| prost_types::Timestamp {
+                    seconds: ts / 1_000_000_000,
+                    nanos: (ts % 1_000_000_000) as i32,
+                }),
+                cursor,
+                limit: Some(limit.clamp(1, 1000)),
+                operation_types: operation_types.unwrap_or_default(),
+                state,
+                without_commissions: Some(without_commissions),
+                without_trades: Some(without_trades),
+                without_overnights: Some(without_overnights),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = ops.get_operations_by_cursor(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_operations_by_cursor: {e}"))
+            })?;
+            let operations_response = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item("has_next", operations_response.has_next)?;
+                d.set_item("next_cursor", &operations_response.next_cursor)?;
+
+                let items_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for item in &operations_response.items {
+                    let idict = PyDict::new(py);
+                    idict.set_item("id", &item.id)?;
+                    idict.set_item("parent_operation_id", &item.parent_operation_id)?;
+                    idict.set_item(
+                        "currency",
+                        item.payment
+                            .as_ref()
+                            .map(|p| p.currency.as_str())
+                            .unwrap_or(""),
+                    )?;
+                    idict.set_item(
+                        "payment",
+                        item.payment
+                            .as_ref()
+                            .map(|mv| money_value_to_dict(py, mv))
+                            .transpose()?,
+                    )?;
+                    idict.set_item(
+                        "price",
+                        item.price
+                            .as_ref()
+                            .map(|mv| money_value_to_dict(py, mv))
+                            .transpose()?,
+                    )?;
+                    idict.set_item("status", item.state)?;
+                    idict.set_item("quantity", item.quantity)?;
+                    idict.set_item("quantity_rest", item.quantity_rest)?;
+                    idict.set_item("figi", &item.figi)?;
+                    idict.set_item("instrument_type", &item.instrument_type)?;
+                    idict.set_item(
+                        "date",
+                        item.date.as_ref().map(|t| t.seconds).unwrap_or(0),
+                    )?;
+                    idict.set_item("type", item.r#type)?;
+                    idict.set_item("operation_type", operation_type_to_str(item.r#type))?;
+                    items_list.append(idict)?;
+                }
+                d.set_item("items", items_list)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get the available withdraw limits for an account (F7).
+    #[pyo3(signature = (account_id))]
+    pub fn get_withdraw_limits<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut ops = inner.operations().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("operations service: {e}"))
+            })?;
+            let request = proto::WithdrawLimitsRequest {
+                account_id: account_id.clone(),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = ops.get_withdraw_limits(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_withdraw_limits: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                let money_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for m in &resp.money {
+                    money_list.append(money_value_to_dict(py, m)?)?;
+                }
+                d.set_item("money", money_list)?;
+                let blocked_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for b in &resp.blocked {
+                    blocked_list.append(money_value_to_dict(py, b)?)?;
+                }
+                d.set_item("blocked", blocked_list)?;
+                let guarantee_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for g in &resp.blocked_guarantee {
+                    guarantee_list.append(money_value_to_dict(py, g)?)?;
+                }
+                d.set_item("blocked_guarantee", guarantee_list)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get the current user tariff / request limits (F8).
+    pub fn get_user_tariff<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut users = inner.users().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("users service: {e}"))
+            })?;
+            let request = proto::GetUserTariffRequest {};
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = users.get_user_tariff(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_user_tariff: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+
+                let unary_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for u in &resp.unary_limits {
+                    let ud = PyDict::new(py);
+                    ud.set_item("limit_per_minute", u.limit_per_minute)?;
+                    let methods = PyList::new(py, &[] as &[Py<PyAny>])?;
+                    for m in &u.methods {
+                        methods.append(m)?;
+                    }
+                    ud.set_item("methods", methods)?;
+                    ud.set_item("limit_per_second", u.limit_per_second)?;
+                    unary_list.append(ud)?;
+                }
+                d.set_item("unary_limits", unary_list)?;
+
+                let stream_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for s in &resp.stream_limits {
+                    let sd = PyDict::new(py);
+                    sd.set_item("limit", s.limit)?;
+                    let streams = PyList::new(py, &[] as &[Py<PyAny>])?;
+                    for st in &s.streams {
+                        streams.append(st)?;
+                    }
+                    sd.set_item("streams", streams)?;
+                    sd.set_item("open", s.open)?;
+                    stream_list.append(sd)?;
+                }
+                d.set_item("stream_limits", stream_list)?;
+
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Estimate the cost/price of an order (F9).
+    #[pyo3(signature = (account_id, instrument_id, price, direction, quantity))]
+    pub fn get_order_price<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        instrument_id: String,
+        price: f64,
+        direction: i32,
+        quantity: i64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut orders = inner.orders().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("orders service: {e}"))
+            })?;
+            let price_quotation = {
+                let units = price.trunc() as i64;
+                let nano = ((price.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            };
+            let request = proto::GetOrderPriceRequest {
+                account_id: account_id.clone(),
+                instrument_id,
+                price: Some(price_quotation),
+                direction,
+                quantity,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = orders.get_order_price(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_order_price: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item(
+                    "total_order_amount",
+                    resp.total_order_amount
+                        .as_ref()
+                        .map(|mv| money_value_to_dict(py, mv))
+                        .transpose()?,
+                )?;
+                d.set_item(
+                    "initial_order_amount",
+                    resp.initial_order_amount
+                        .as_ref()
+                        .map(|mv| money_value_to_dict(py, mv))
+                        .transpose()?,
+                )?;
+                d.set_item("lots_requested", resp.lots_requested)?;
+                d.set_item(
+                    "executed_commission",
+                    resp.executed_commission
+                        .as_ref()
+                        .map(|mv| money_value_to_dict(py, mv))
+                        .transpose()?,
+                )?;
+                d.set_item(
+                    "service_commission",
+                    resp.service_commission
+                        .as_ref()
+                        .map(|mv| money_value_to_dict(py, mv))
+                        .transpose()?,
+                )?;
+                d.set_item(
+                    "deal_commission",
+                    resp.deal_commission
+                        .as_ref()
+                        .map(|mv| money_value_to_dict(py, mv))
+                        .transpose()?,
+                )?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
     // -----------------------------------------------------------------------
     // Native streaming (future enhancement)
     // -----------------------------------------------------------------------

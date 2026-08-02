@@ -872,6 +872,144 @@ class TInvestGrpcClient:
         logger.warning("get_operations: native client not available")
         return None
 
+    async def get_operations_by_cursor(
+        self,
+        account_id: str,
+        instrument_id: str | None = None,
+        from_ts: int | None = None,
+        to_ts: int | None = None,
+        cursor: str | None = None,
+        limit: int = 100,
+        operation_types: list[int] | None = None,
+        state: int | None = None,
+        without_commissions: bool = False,
+        without_trades: bool = False,
+        without_overnights: bool = False,
+    ) -> dict | None:
+        """Get operations for the account with explicit pagination (F6).
+
+        Parameters
+        ----------
+        account_id : str
+            The account ID.
+        instrument_id : str, optional
+            Instrument identifier (figi/uid/ticker_class).
+        from_ts : int, optional
+            Start time as unix nanos.
+        to_ts : int, optional
+            End time as unix nanos.
+        cursor : str, optional
+            Opaque cursor from the previous page.
+        limit : int, default 100
+            Max number of operations per page (1..1000).
+        operation_types : list[int], optional
+            Filter by operation type enum values.
+        state : int, optional
+            Operation state filter (1=Executed, 2=Canceled, 3=Progress).
+        without_commissions : bool, default False
+            Exclude commissions from the response.
+        without_trades : bool, default False
+            Exclude trade details from the response.
+        without_overnights : bool, default False
+            Exclude overnight operations.
+
+        Returns
+        -------
+        dict | None
+            Response dict with has_next, next_cursor and items list.
+
+        """
+        if self._native is not None:
+            return await self._native.get_operations_by_cursor(
+                account_id=account_id,
+                instrument_id=instrument_id,
+                from_ts=from_ts,
+                to_ts=to_ts,
+                cursor=cursor,
+                limit=limit,
+                operation_types=operation_types,
+                state=state,
+                without_commissions=without_commissions,
+                without_trades=without_trades,
+                without_overnights=without_overnights,
+            )
+        logger.warning("get_operations_by_cursor: native client not available")
+        return None
+
+    async def get_withdraw_limits(self, account_id: str) -> dict | None:
+        """Get the available withdraw limits for an account (F7).
+
+        Parameters
+        ----------
+        account_id : str
+            The account ID.
+
+        Returns
+        -------
+        dict | None
+            Response dict with money, blocked and blocked_guarantee lists.
+
+        """
+        if self._native is not None:
+            return await self._native.get_withdraw_limits(account_id=account_id)
+        logger.warning("get_withdraw_limits: native client not available")
+        return None
+
+    async def get_user_tariff(self) -> dict | None:
+        """Get the current user tariff / request limits (F8).
+
+        Returns
+        -------
+        dict | None
+            Response dict with unary_limits and stream_limits lists.
+
+        """
+        if self._native is not None:
+            return await self._native.get_user_tariff()
+        logger.warning("get_user_tariff: native client not available")
+        return None
+
+    async def get_order_price(
+        self,
+        account_id: str,
+        instrument_id: str,
+        price: float,
+        direction: int,
+        quantity: int,
+    ) -> dict | None:
+        """Estimate the cost/price of an order (F9).
+
+        Parameters
+        ----------
+        account_id : str
+            The account ID.
+        instrument_id : str
+            Instrument identifier (figi/uid/ticker_class).
+        price : float
+            The order price per instrument.
+        direction : int
+            Order direction (1=Buy, 2=Sell).
+        quantity : int
+            Order quantity in lots.
+
+        Returns
+        -------
+        dict | None
+            Response dict with total_order_amount, initial_order_amount,
+            lots_requested and commission fields.
+
+        """
+        if self._native is not None:
+            return await self._native.get_order_price(
+                account_id=account_id,
+                instrument_id=instrument_id,
+                price=price,
+                direction=direction,
+                quantity=quantity,
+            )
+        logger.warning("get_order_price: native client not available")
+        return None
+
     async def get_accounts(self) -> list[dict]:
         """Get user accounts.
 
