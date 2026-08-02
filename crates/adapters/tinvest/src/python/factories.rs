@@ -2730,6 +2730,629 @@ impl PyTInvestGrpcClient {
     }
 
     // -----------------------------------------------------------------------
+    // Sandbox methods (F14) — full SandboxService surface
+    // -----------------------------------------------------------------------
+
+    /// Get sandbox accounts.
+    pub fn get_sandbox_accounts<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let request = proto::GetAccountsRequest { status: Some(4) };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.get_sandbox_accounts(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_sandbox_accounts: {e}"))
+            })?;
+            let accounts = response.into_inner().accounts;
+
+            Python::attach(|py| {
+                let py_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for a in &accounts {
+                    let d = PyDict::new(py);
+                    d.set_item("id", &a.id)?;
+                    d.set_item("type", a.r#type)?;
+                    d.set_item("name", &a.name)?;
+                    d.set_item("status", a.status)?;
+                    py_list.append(d)?;
+                }
+                Ok(py_list.into_any().unbind())
+            })
+        })
+    }
+
+    /// Submit an order asynchronously in the sandbox (F14).
+    #[pyo3(signature = (account_id, figi, quantity, price=None, direction=1, order_type=2, order_id=""))]
+    pub fn post_sandbox_order_async<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        figi: String,
+        quantity: i64,
+        price: Option<f64>,
+        direction: i32,
+        order_type: i32,
+        order_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let price_quotation = price.map(|p| {
+                let units = p.trunc() as i64;
+                let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            });
+            let request = proto::PostOrderAsyncRequest {
+                instrument_id: figi.clone(),
+                quantity,
+                price: price_quotation,
+                direction,
+                account_id: account_id.clone(),
+                order_type,
+                order_id: order_id.clone(),
+                time_in_force: None,
+                price_type: None,
+                confirm_margin_trade: false,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.post_sandbox_order_async(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("post_sandbox_order_async: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item("order_request_id", &resp.order_request_id)?;
+                d.set_item("execution_report_status", resp.execution_report_status)?;
+                d.set_item("trade_intent_id", resp.trade_intent_id)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Replace (modify) an order in the sandbox (F14).
+    #[pyo3(signature = (account_id, order_id, idempotency_key, quantity, price=None))]
+    pub fn replace_sandbox_order<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        order_id: String,
+        idempotency_key: String,
+        quantity: i64,
+        price: Option<f64>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let price_quotation = price.map(|p| {
+                let units = p.trunc() as i64;
+                let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            });
+            let request = proto::ReplaceOrderRequest {
+                account_id: account_id.clone(),
+                order_id_type: Some(1),
+                order_id: order_id.clone(),
+                idempotency_key: idempotency_key.clone(),
+                quantity,
+                price: price_quotation,
+                price_type: Some(2),
+                confirm_margin_trade: false,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.replace_sandbox_order(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("replace_sandbox_order: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item("order_id", &resp.order_id)?;
+                d.set_item("figi", &resp.figi)?;
+                d.set_item("direction", resp.direction)?;
+                d.set_item("order_type", resp.order_type)?;
+                d.set_item("lots_requested", resp.lots_requested)?;
+                d.set_item("lots_executed", resp.lots_executed)?;
+                d.set_item("execution_report_status", resp.execution_report_status)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Cancel an order in the sandbox (F14).
+    #[pyo3(signature = (account_id, order_id))]
+    pub fn cancel_sandbox_order<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        order_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let request = proto::CancelOrderRequest {
+                account_id: account_id.clone(),
+                order_id: order_id.clone(),
+                order_id_type: Some(1),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.cancel_sandbox_order(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("cancel_sandbox_order: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item(
+                    "time",
+                    resp.time.as_ref().map(|t| t.seconds).unwrap_or(0),
+                )?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get active orders for a sandbox account (F14).
+    #[pyo3(signature = (account_id))]
+    pub fn get_sandbox_orders<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let request = proto::GetOrdersRequest {
+                account_id: account_id.clone(),
+                advanced_filters: None,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.get_sandbox_orders(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_sandbox_orders: {e}"))
+            })?;
+            let orders = response.into_inner().orders;
+
+            Python::attach(|py| {
+                let py_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for os in &orders {
+                    let d = order_state_to_dict(py, os)?;
+                    py_list.append(d)?;
+                }
+                Ok(py_list.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get order state for a sandbox account (F14).
+    #[pyo3(signature = (account_id, order_id))]
+    pub fn get_sandbox_order_state<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        order_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let request = proto::GetOrderStateRequest {
+                account_id: account_id.clone(),
+                order_id: order_id.clone(),
+                price_type: 1,
+                order_id_type: Some(1),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.get_sandbox_order_state(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_sandbox_order_state: {e}"))
+            })?;
+            let order_state = response.into_inner();
+
+            Python::attach(|py| {
+                let d = order_state_to_dict(py, &order_state)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Estimate the cost of a sandbox order (F14).
+    #[pyo3(signature = (account_id, instrument_id, price, direction, quantity))]
+    pub fn get_sandbox_order_price<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        instrument_id: String,
+        price: f64,
+        direction: i32,
+        quantity: i64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let price_quotation = {
+                let units = price.trunc() as i64;
+                let nano = ((price.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            };
+            let request = proto::GetOrderPriceRequest {
+                account_id: account_id.clone(),
+                instrument_id,
+                price: Some(price_quotation),
+                direction,
+                quantity,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.get_sandbox_order_price(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_sandbox_order_price: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item(
+                    "total_order_amount",
+                    resp.total_order_amount
+                        .as_ref()
+                        .map(|mv| money_value_to_dict(py, mv))
+                        .transpose()?,
+                )?;
+                d.set_item(
+                    "initial_order_amount",
+                    resp.initial_order_amount
+                        .as_ref()
+                        .map(|mv| money_value_to_dict(py, mv))
+                        .transpose()?,
+                )?;
+                d.set_item("lots_requested", resp.lots_requested)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get sandbox operations by cursor (F14).
+    #[pyo3(signature = (account_id, instrument_id=None, from_ts=None, to_ts=None, cursor=None, limit=100, operation_types=None, state=None, without_commissions=false, without_trades=false, without_overnights=false))]
+    pub fn get_sandbox_operations_by_cursor<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        instrument_id: Option<String>,
+        from_ts: Option<i64>,
+        to_ts: Option<i64>,
+        cursor: Option<String>,
+        limit: i32,
+        operation_types: Option<Vec<i32>>,
+        state: Option<i32>,
+        without_commissions: bool,
+        without_trades: bool,
+        without_overnights: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let request = proto::GetOperationsByCursorRequest {
+                account_id: account_id.clone(),
+                instrument_id,
+                from: from_ts.map(|ts| prost_types::Timestamp {
+                    seconds: ts / 1_000_000_000,
+                    nanos: (ts % 1_000_000_000) as i32,
+                }),
+                to: to_ts.map(|ts| prost_types::Timestamp {
+                    seconds: ts / 1_000_000_000,
+                    nanos: (ts % 1_000_000_000) as i32,
+                }),
+                cursor,
+                limit: Some(limit.clamp(1, 1000)),
+                operation_types: operation_types.unwrap_or_default(),
+                state,
+                without_commissions: Some(without_commissions),
+                without_trades: Some(without_trades),
+                without_overnights: Some(without_overnights),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.get_sandbox_operations_by_cursor(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_sandbox_operations_by_cursor: {e}"))
+            })?;
+            let operations_response = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item("has_next", operations_response.has_next)?;
+                d.set_item("next_cursor", &operations_response.next_cursor)?;
+                let items_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for item in &operations_response.items {
+                    let idict = PyDict::new(py);
+                    idict.set_item("id", &item.id)?;
+                    idict.set_item("figi", &item.figi)?;
+                    idict.set_item("payment",
+                        item.payment.as_ref().map(|mv| money_value_to_dict(py, mv)).transpose()?)?;
+                    idict.set_item("price",
+                        item.price.as_ref().map(|mv| money_value_to_dict(py, mv)).transpose()?)?;
+                    idict.set_item("quantity", item.quantity)?;
+                    idict.set_item("date", item.date.as_ref().map(|t| t.seconds).unwrap_or(0))?;
+                    idict.set_item("type", item.r#type)?;
+                    idict.set_item("operation_type", operation_type_to_str(item.r#type))?;
+                    items_list.append(idict)?;
+                }
+                d.set_item("items", items_list)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get the available withdraw limits for a sandbox account (F14).
+    #[pyo3(signature = (account_id))]
+    pub fn get_sandbox_withdraw_limits<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let request = proto::WithdrawLimitsRequest {
+                account_id: account_id.clone(),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.get_sandbox_withdraw_limits(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_sandbox_withdraw_limits: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                let money_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for m in &resp.money {
+                    money_list.append(money_value_to_dict(py, m)?)?;
+                }
+                d.set_item("money", money_list)?;
+                let blocked_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for b in &resp.blocked {
+                    blocked_list.append(money_value_to_dict(py, b)?)?;
+                }
+                d.set_item("blocked", blocked_list)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get the max lots available for a sandbox account (F14).
+    #[pyo3(signature = (account_id, instrument_id, price=None))]
+    pub fn get_sandbox_max_lots<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        instrument_id: String,
+        price: Option<f64>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let price_quotation = price.map(|p| {
+                let units = p.trunc() as i64;
+                let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            });
+            let request = proto::GetMaxLotsRequest {
+                account_id: account_id.clone(),
+                instrument_id,
+                price: price_quotation,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.get_sandbox_max_lots(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_sandbox_max_lots: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item("currency", &resp.currency)?;
+                d.set_item("buy_max_lots", resp.buy_limits.map(|l| l.buy_max_lots).unwrap_or(0))?;
+                d.set_item("sell_max_lots", resp.sell_limits.map(|l| l.sell_max_lots).unwrap_or(0))?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Post a stop-order in the sandbox (F14).
+    #[pyo3(signature = (account_id, figi, quantity, order_id, price=None, stop_price=None, direction=1, expiration_type=1, stop_order_type=1, exchange_order_type=0, take_profit_type=0))]
+    pub fn post_sandbox_stop_order<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        figi: String,
+        quantity: i64,
+        order_id: String,
+        price: Option<f64>,
+        stop_price: Option<f64>,
+        direction: i32,
+        expiration_type: i32,
+        stop_order_type: i32,
+        exchange_order_type: i32,
+        take_profit_type: i32,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let price_value = price.map(|p| {
+                let units = p.trunc() as i64;
+                let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            });
+            let stop_price_value = stop_price.map(|p| {
+                let units = p.trunc() as i64;
+                let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            });
+            #[allow(deprecated)]
+            let request = proto::PostStopOrderRequest {
+                figi: None,
+                quantity,
+                price: price_value,
+                stop_price: stop_price_value,
+                direction,
+                account_id: account_id.clone(),
+                expiration_type,
+                stop_order_type,
+                instrument_id: figi.clone(),
+                order_id: order_id.clone(),
+                expire_date: None,
+                exchange_order_type,
+                take_profit_type,
+                trailing_data: None,
+                price_type: 0,
+                confirm_margin_trade: false,
+                instant_execution: None,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.post_sandbox_stop_order(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("post_sandbox_stop_order: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item("stop_order_id", &resp.stop_order_id)?;
+                d.set_item("order_request_id", &resp.order_request_id)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get active stop-orders for a sandbox account (F14).
+    #[pyo3(signature = (account_id))]
+    pub fn get_sandbox_stop_orders<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let request = proto::GetStopOrdersRequest {
+                account_id: account_id.clone(),
+                status: 0,
+                from: None,
+                to: None,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.get_sandbox_stop_orders(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_sandbox_stop_orders: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let py_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for order in &resp.stop_orders {
+                    let d = PyDict::new(py);
+                    d.set_item("stop_order_id", &order.stop_order_id)?;
+                    d.set_item("lots_requested", order.lots_requested)?;
+                    d.set_item("figi", &order.figi)?;
+                    d.set_item("direction", order.direction)?;
+                    d.set_item("order_type", order.order_type)?;
+                    d.set_item(
+                        "create_date",
+                        order.create_date.as_ref().map(|t| t.seconds).unwrap_or(0),
+                    )?;
+                    py_list.append(d)?;
+                }
+                Ok(py_list.into_any().unbind())
+            })
+        })
+    }
+
+    /// Cancel a stop-order in the sandbox (F14).
+    #[pyo3(signature = (account_id, stop_order_id))]
+    pub fn cancel_sandbox_stop_order<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        stop_order_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.sandbox().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("sandbox service: {e}"))
+            })?;
+            let request = proto::CancelStopOrderRequest {
+                account_id: account_id.clone(),
+                stop_order_id: stop_order_id.clone(),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.cancel_sandbox_stop_order(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("cancel_sandbox_stop_order: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item("time", resp.time.as_ref().map(|t| t.seconds).unwrap_or(0))?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get available signal strategies (F15, NOT_APPLICABLE).
+    ///
+    /// The SignalsService exposes analytical signals which have no Nautilus
+    /// event-model equivalent (ADR-5). This is a contract-completeness stub
+    /// only — no engine integration is performed.
+    #[pyo3(signature = (strategy_id=None))]
+    pub fn get_signals<'py>(
+        &mut self,
+        py: Python<'py>,
+        strategy_id: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.signals().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("signals service: {e}"))
+            })?;
+            let request = proto::GetStrategiesRequest {
+                strategy_id,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = stub.get_strategies(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_signals: {e}"))
+            })?;
+            let strategies = response.into_inner().strategies;
+
+            Python::attach(|py| {
+                let py_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for s in &strategies {
+                    let d = PyDict::new(py);
+                    d.set_item("strategy_id", &s.strategy_id)?;
+                    d.set_item("strategy_name", &s.strategy_name)?;
+                    d.set_item("active_signals", s.active_signals)?;
+                    d.set_item("total_signals", s.total_signals)?;
+                    py_list.append(d)?;
+                }
+                Ok(py_list.into_any().unbind())
+            })
+        })
+    }
+
+    // -----------------------------------------------------------------------
     // Native streaming (future enhancement)
     // -----------------------------------------------------------------------
     // TODO: Native gRPC streaming via PyO3

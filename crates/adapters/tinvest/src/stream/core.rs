@@ -33,6 +33,7 @@ use crate::proto::{
     MarketDataServerSideStreamRequest,
     OrderStateStreamRequest,
     TradesStreamRequest, TradesStreamResponse,
+    OperationsStreamRequest, OperationsStreamResponse,
     PositionsStreamRequest, PositionsStreamResponse,
     PortfolioStreamRequest, PortfolioStreamResponse,
     SubscribeTradesRequest, SubscribeOrderBookRequest, SubscribeInfoRequest,
@@ -309,6 +310,16 @@ define_server_side_stream!(
     PositionsStreamRequest,
     PositionsStreamResponse,
     "Positions"
+);
+
+define_server_side_stream!(
+    (account_id)
+    pub TInvestOperationsStream,
+    operations_stream,
+    operations_stream,
+    OperationsStreamRequest,
+    OperationsStreamResponse,
+    "Operations"
 );
 
 define_server_side_stream!(

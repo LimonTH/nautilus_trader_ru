@@ -33,6 +33,7 @@ use crate::proto::{
     orders_service_client::OrdersServiceClient,
     orders_stream_service_client::OrdersStreamServiceClient,
     sandbox_service_client::SandboxServiceClient,
+    signal_service_client::SignalServiceClient,
     stop_orders_service_client::StopOrdersServiceClient,
     users_service_client::UsersServiceClient,
 };
@@ -76,6 +77,7 @@ pub struct TInvestGrpcClient {
     stop_orders: Arc<RwLock<Option<StopOrdersServiceClient<Channel>>>>,
     users: Arc<RwLock<Option<UsersServiceClient<Channel>>>>,
     sandbox: Arc<RwLock<Option<SandboxServiceClient<Channel>>>>,
+    signals: Arc<RwLock<Option<SignalServiceClient<Channel>>>>,
 }
 
 impl TInvestGrpcClient {
@@ -99,6 +101,7 @@ impl TInvestGrpcClient {
             stop_orders: Arc::new(RwLock::new(None)),
             users: Arc::new(RwLock::new(None)),
             sandbox: Arc::new(RwLock::new(None)),
+            signals: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -149,6 +152,7 @@ impl TInvestGrpcClient {
         *self.stop_orders.write().await = None;
         *self.users.write().await = None;
         *self.sandbox.write().await = None;
+        *self.signals.write().await = None;
     }
 
     /// Returns true if the client is connected.
@@ -332,6 +336,20 @@ impl TInvestGrpcClient {
         if guard.is_none() {
             let channel = self.get_channel()?;
             *guard = Some(SandboxServiceClient::new(channel));
+        }
+        Ok(guard.clone().unwrap())
+    }
+
+    /// Get or create the signals service stub (F15).
+    ///
+    /// The SignalsService exposes analytical signals which have no Nautilus
+    /// equivalent (NOT_APPLICABLE); this stub is provided for completeness of
+    /// the gRPC contract surface only.
+    pub async fn signals(&self) -> Result<SignalServiceClient<Channel>, TInvestClientError> {
+        let mut guard = self.signals.write().await;
+        if guard.is_none() {
+            let channel = self.get_channel()?;
+            *guard = Some(SignalServiceClient::new(channel));
         }
         Ok(guard.clone().unwrap())
     }

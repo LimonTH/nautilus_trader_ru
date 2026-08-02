@@ -1399,3 +1399,202 @@ class TInvestGrpcClient:
             )
         logger.warning("sandbox_pay_in: native client not available")
         return None
+
+    # -- F14: Full sandbox method surface ------------------------------------------------------
+
+    async def get_sandbox_accounts(self) -> list[dict]:
+        """Get sandbox accounts (F14)."""
+        if self._native is not None:
+            return await self._native.get_sandbox_accounts()
+        logger.warning("get_sandbox_accounts: native client not available")
+        return []
+
+    async def post_sandbox_order_async(
+        self,
+        account_id: str,
+        figi: str,
+        quantity: int,
+        price: float | None = None,
+        direction: int = 1,
+        order_type: int = 2,
+        order_id: str | None = None,
+    ) -> dict | None:
+        """Submit an order asynchronously in the sandbox (F14)."""
+        if self._native is not None:
+            return await self._native.post_sandbox_order_async(
+                account_id=account_id,
+                figi=figi,
+                quantity=quantity,
+                price=price,
+                direction=direction,
+                order_type=order_type,
+                order_id=order_id or "",
+            )
+        logger.warning("post_sandbox_order_async: native client not available")
+        return None
+
+    async def replace_sandbox_order(
+        self,
+        account_id: str,
+        order_id: str,
+        idempotency_key: str,
+        quantity: int,
+        price: float | None = None,
+    ) -> dict | None:
+        """Replace (modify) an order in the sandbox (F14)."""
+        if self._native is not None:
+            return await self._native.replace_sandbox_order(
+                account_id=account_id,
+                order_id=order_id,
+                idempotency_key=idempotency_key,
+                quantity=quantity,
+                price=price,
+            )
+        logger.warning("replace_sandbox_order: native client not available")
+        return None
+
+    async def cancel_sandbox_order(self, account_id: str, order_id: str) -> dict | None:
+        """Cancel an order in the sandbox (F14)."""
+        if self._native is not None:
+            return await self._native.cancel_sandbox_order(account_id, order_id)
+        logger.warning("cancel_sandbox_order: native client not available")
+        return None
+
+    async def get_sandbox_orders(self, account_id: str) -> list[dict]:
+        """Get active orders for a sandbox account (F14)."""
+        if self._native is not None:
+            return await self._native.get_sandbox_orders(account_id)
+        logger.warning("get_sandbox_orders: native client not available")
+        return []
+
+    async def get_sandbox_order_state(self, account_id: str, order_id: str) -> dict | None:
+        """Get order state for a sandbox account (F14)."""
+        if self._native is not None:
+            return await self._native.get_sandbox_order_state(account_id, order_id)
+        logger.warning("get_sandbox_order_state: native client not available")
+        return None
+
+    async def get_sandbox_order_price(
+        self,
+        account_id: str,
+        instrument_id: str,
+        price: float,
+        direction: int,
+        quantity: int,
+    ) -> dict | None:
+        """Estimate the cost of a sandbox order (F14)."""
+        if self._native is not None:
+            return await self._native.get_sandbox_order_price(
+                account_id=account_id,
+                instrument_id=instrument_id,
+                price=price,
+                direction=direction,
+                quantity=quantity,
+            )
+        logger.warning("get_sandbox_order_price: native client not available")
+        return None
+
+    async def get_sandbox_operations_by_cursor(
+        self,
+        account_id: str,
+        instrument_id: str | None = None,
+        from_ts: int | None = None,
+        to_ts: int | None = None,
+        cursor: str | None = None,
+        limit: int = 100,
+        operation_types: list[int] | None = None,
+        state: int | None = None,
+        without_commissions: bool = False,
+        without_trades: bool = False,
+        without_overnights: bool = False,
+    ) -> dict | None:
+        """Get sandbox operations with pagination (F14)."""
+        if self._native is not None:
+            return await self._native.get_sandbox_operations_by_cursor(
+                account_id=account_id,
+                instrument_id=instrument_id,
+                from_ts=from_ts,
+                to_ts=to_ts,
+                cursor=cursor,
+                limit=limit,
+                operation_types=operation_types,
+                state=state,
+                without_commissions=without_commissions,
+                without_trades=without_trades,
+                without_overnights=without_overnights,
+            )
+        logger.warning("get_sandbox_operations_by_cursor: native client not available")
+        return None
+
+    async def get_sandbox_withdraw_limits(self, account_id: str) -> dict | None:
+        """Get the available withdraw limits for a sandbox account (F14)."""
+        if self._native is not None:
+            return await self._native.get_sandbox_withdraw_limits(account_id)
+        logger.warning("get_sandbox_withdraw_limits: native client not available")
+        return None
+
+    async def get_sandbox_max_lots(
+        self,
+        account_id: str,
+        instrument_id: str,
+        price: float | None = None,
+    ) -> dict | None:
+        """Get the max lots available for a sandbox account (F14)."""
+        if self._native is not None:
+            return await self._native.get_sandbox_max_lots(
+                account_id=account_id,
+                instrument_id=instrument_id,
+                price=price,
+            )
+        logger.warning("get_sandbox_max_lots: native client not available")
+        return None
+
+    async def post_sandbox_stop_order(
+        self,
+        account_id: str,
+        figi: str,
+        quantity: int,
+        order_id: str,
+        price: float | None = None,
+        stop_price: float | None = None,
+        direction: int = 1,
+        expiration_type: int = 1,
+        stop_order_type: int = 1,
+        exchange_order_type: int = 0,
+        take_profit_type: int = 0,
+    ) -> dict | None:
+        """Post a stop-order in the sandbox (F14)."""
+        if self._native is not None:
+            return await self._native.post_sandbox_stop_order(
+                account_id=account_id,
+                figi=figi,
+                quantity=quantity,
+                order_id=order_id,
+                price=price,
+                stop_price=stop_price,
+                direction=direction,
+                expiration_type=expiration_type,
+                stop_order_type=stop_order_type,
+                exchange_order_type=exchange_order_type,
+                take_profit_type=take_profit_type,
+            )
+        logger.warning("post_sandbox_stop_order: native client not available")
+        return None
+
+    async def get_sandbox_stop_orders(self, account_id: str) -> list[dict]:
+        """Get active stop-orders for a sandbox account (F14)."""
+        if self._native is not None:
+            return await self._native.get_sandbox_stop_orders(account_id)
+        logger.warning("get_sandbox_stop_orders: native client not available")
+        return []
+
+    async def cancel_sandbox_stop_order(
+        self,
+        account_id: str,
+        stop_order_id: str,
+    ) -> dict | None:
+        """Cancel a stop-order in the sandbox (F14)."""
+        if self._native is not None:
+            return await self._native.cancel_sandbox_stop_order(account_id, stop_order_id)
+        logger.warning("cancel_sandbox_stop_order: native client not available")
+        return None
