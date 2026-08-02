@@ -340,6 +340,39 @@ fn option_to_dict<'a>(
 }
 
 // ---------------------------------------------------------------------------
+// Helper: Instrument proto → Python dict (used by GetInstrumentBy)
+// ---------------------------------------------------------------------------
+
+fn instrument_to_dict<'a>(
+    py: Python<'a>,
+    inst: &'a proto::Instrument,
+) -> PyResult<Bound<'a, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("figi", &inst.figi)?;
+    d.set_item("ticker", &inst.ticker)?;
+    d.set_item("class_code", &inst.class_code)?;
+    d.set_item("isin", &inst.isin)?;
+    d.set_item("lot", inst.lot)?;
+    d.set_item("currency", &inst.currency)?;
+    d.set_item("name", &inst.name)?;
+    d.set_item("exchange", &inst.exchange)?;
+    d.set_item("instrument_type", &inst.instrument_type)?;
+    d.set_item("uid", &inst.uid)?;
+    d.set_item("trading_status", inst.trading_status)?;
+    d.set_item("api_trade_available_flag", inst.api_trade_available_flag)?;
+    d.set_item("buy_available_flag", inst.buy_available_flag)?;
+    d.set_item("sell_available_flag", inst.sell_available_flag)?;
+    d.set_item(
+        "min_price_increment",
+        inst.min_price_increment
+            .as_ref()
+            .map(|q| quotation_to_dict(py, q))
+            .transpose()?,
+    )?;
+    Ok(d)
+}
+
+// ---------------------------------------------------------------------------
 // PyTInvestGrpcClient
 // ---------------------------------------------------------------------------
 
@@ -2497,6 +2530,201 @@ impl PyTInvestGrpcClient {
                         .transpose()?,
                 )?;
                 Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Find an instrument by figi/ticker/uid (F10).
+    #[pyo3(signature = (id_type, id, class_code=None))]
+    pub fn get_instrument_by<'py>(
+        &mut self,
+        py: Python<'py>,
+        id_type: i32,
+        id: String,
+        class_code: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut instruments = inner.instruments().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("instruments service: {e}"))
+            })?;
+            let request = proto::InstrumentRequest {
+                id_type,
+                class_code,
+                id: id.clone(),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = instruments.get_instrument_by(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_instrument_by: {e}"))
+            })?;
+            let instrument = response.into_inner().instrument;
+
+            Python::attach(|py| {
+                let d = match instrument {
+                    Some(inst) => instrument_to_dict(py, &inst)?,
+                    None => PyDict::new(py),
+                };
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get the trading schedules for an exchange (F11).
+    #[pyo3(signature = (exchange=None, from_ts=None, to_ts=None))]
+    pub fn get_trading_schedules<'py>(
+        &mut self,
+        py: Python<'py>,
+        exchange: Option<String>,
+        from_ts: Option<i64>,
+        to_ts: Option<i64>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut instruments = inner.instruments().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("instruments service: {e}"))
+            })?;
+            let request = proto::TradingSchedulesRequest {
+                exchange,
+                from: from_ts.map(|ts| prost_types::Timestamp {
+                    seconds: ts / 1_000_000_000,
+                    nanos: (ts % 1_000_000_000) as i32,
+                }),
+                to: to_ts.map(|ts| prost_types::Timestamp {
+                    seconds: ts / 1_000_000_000,
+                    nanos: (ts % 1_000_000_000) as i32,
+                }),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = instruments.trading_schedules(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("trading_schedules: {e}"))
+            })?;
+            let exchanges = response.into_inner().exchanges;
+
+            Python::attach(|py| {
+                let py_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for ex in &exchanges {
+                    let ed = PyDict::new(py);
+                    ed.set_item("exchange", &ex.exchange)?;
+                    let days_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                    for day in &ex.days {
+                        let dd = PyDict::new(py);
+                        dd.set_item(
+                            "date",
+                            day.date.as_ref().map(|t| t.seconds).unwrap_or(0),
+                        )?;
+                        dd.set_item("is_trading_day", day.is_trading_day)?;
+                        dd.set_item(
+                            "start_time",
+                            day.start_time.as_ref().map(|t| t.seconds).unwrap_or(0),
+                        )?;
+                        dd.set_item(
+                            "end_time",
+                            day.end_time.as_ref().map(|t| t.seconds).unwrap_or(0),
+                        )?;
+                        days_list.append(dd)?;
+                    }
+                    ed.set_item("days", days_list)?;
+                    py_list.append(ed)?;
+                }
+                Ok(py_list.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get trading statuses for multiple instruments (F11).
+    #[pyo3(signature = (instrument_ids))]
+    pub fn get_trading_statuses<'py>(
+        &mut self,
+        py: Python<'py>,
+        instrument_ids: Vec<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut md = inner.market_data().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("market_data service: {e}"))
+            })?;
+            let request = proto::GetTradingStatusesRequest {
+                instrument_id: instrument_ids,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = md.get_trading_statuses(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_trading_statuses: {e}"))
+            })?;
+            let statuses = response.into_inner().trading_statuses;
+
+            Python::attach(|py| {
+                let py_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for st in &statuses {
+                    let d = PyDict::new(py);
+                    d.set_item("figi", &st.figi)?;
+                    d.set_item("trading_status", st.trading_status)?;
+                    d.set_item("limit_order_available_flag", st.limit_order_available_flag)?;
+                    d.set_item("market_order_available_flag", st.market_order_available_flag)?;
+                    d.set_item("api_trade_available_flag", st.api_trade_available_flag)?;
+                    d.set_item("bestprice_order_available_flag", st.bestprice_order_available_flag)?;
+                    d.set_item("only_best_price", st.only_best_price)?;
+                    d.set_item("ticker", &st.ticker)?;
+                    d.set_item("class_code", &st.class_code)?;
+                    py_list.append(d)?;
+                }
+                Ok(py_list.into_any().unbind())
+            })
+        })
+    }
+
+    /// Get the accrued interest (coupon income) for a bond (F12).
+    #[pyo3(signature = (instrument_id, from_ts, to_ts))]
+    pub fn get_accrued_interests<'py>(
+        &mut self,
+        py: Python<'py>,
+        instrument_id: String,
+        from_ts: i64,
+        to_ts: i64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut instruments = inner.instruments().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("instruments service: {e}"))
+            })?;
+            #[allow(deprecated)]
+            let request = proto::GetAccruedInterestsRequest {
+                figi: String::new(), // deprecated
+                from: Some(prost_types::Timestamp {
+                    seconds: from_ts / 1_000_000_000,
+                    nanos: (from_ts % 1_000_000_000) as i32,
+                }),
+                to: Some(prost_types::Timestamp {
+                    seconds: to_ts / 1_000_000_000,
+                    nanos: (to_ts % 1_000_000_000) as i32,
+                }),
+                instrument_id: instrument_id.clone(),
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = instruments.get_accrued_interests(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_accrued_interests: {e}"))
+            })?;
+            let interests = response.into_inner().accrued_interests;
+
+            Python::attach(|py| {
+                let py_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for a in &interests {
+                    let d = PyDict::new(py);
+                    d.set_item("date", a.date.as_ref().map(|t| t.seconds).unwrap_or(0))?;
+                    d.set_item(
+                        "value",
+                        a.value.as_ref().map(|q| quotation_to_dict(py, q)).transpose()?,
+                    )?;
+                    d.set_item(
+                        "value_percent",
+                        a.value_percent.as_ref().map(|q| quotation_to_dict(py, q)).transpose()?,
+                    )?;
+                    d.set_item(
+                        "nominal",
+                        a.nominal.as_ref().map(|q| quotation_to_dict(py, q)).transpose()?,
+                    )?;
+                    py_list.append(d)?;
+                }
+                Ok(py_list.into_any().unbind())
             })
         })
     }

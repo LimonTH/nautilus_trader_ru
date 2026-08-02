@@ -1010,6 +1010,125 @@ class TInvestGrpcClient:
         logger.warning("get_order_price: native client not available")
         return None
 
+    async def get_instrument_by(
+        self,
+        id_type: int,
+        id: str,
+        class_code: str | None = None,
+    ) -> dict | None:
+        """Find an instrument by figi/ticker/uid (F10).
+
+        Parameters
+        ----------
+        id_type : int
+            InstrumentIdType (1=FIGI, 2=Ticker, 3=UID, 4=PositionUid, 5=Id).
+        id : str
+            The identifier value to search for.
+        class_code : str, optional
+            The class code; required when ``id_type`` is ticker.
+
+        Returns
+        -------
+        dict | None
+            Instrument dict or None if not found.
+
+        """
+        if self._native is not None:
+            try:
+                return await self._native.get_instrument_by(
+                    id_type=id_type,
+                    id=id,
+                    class_code=class_code,
+                )
+            except Exception as e:
+                logger.warning(f"Instrument not found by {id_type}:{id}: {e}")
+                return None
+        logger.warning("get_instrument_by: native client not available")
+        return None
+
+    async def get_trading_schedules(
+        self,
+        exchange: str | None = None,
+        from_ts: int | None = None,
+        to_ts: int | None = None,
+    ) -> list[dict]:
+        """Get the trading schedules for an exchange (F11).
+
+        Parameters
+        ----------
+        exchange : str, optional
+            Exchange name; if omitted, all exchanges are returned.
+        from_ts : int, optional
+            Start time as unix nanos.
+        to_ts : int, optional
+            End time as unix nanos.
+
+        Returns
+        -------
+        list[dict]
+            List of exchange schedules with days list.
+
+        """
+        if self._native is not None:
+            return await self._native.get_trading_schedules(
+                exchange=exchange,
+                from_ts=from_ts,
+                to_ts=to_ts,
+            )
+        logger.warning("get_trading_schedules: native client not available")
+        return []
+
+    async def get_trading_statuses(self, instrument_ids: list[str]) -> list[dict]:
+        """Get trading statuses for multiple instruments (F11).
+
+        Parameters
+        ----------
+        instrument_ids : list[str]
+            Instrument identifiers (figi/uid/ticker_class).
+
+        Returns
+        -------
+        list[dict]
+            List of trading status dicts.
+
+        """
+        if self._native is not None:
+            return await self._native.get_trading_statuses(instrument_ids=instrument_ids)
+        logger.warning("get_trading_statuses: native client not available")
+        return []
+
+    async def get_accrued_interests(
+        self,
+        instrument_id: str,
+        from_ts: int,
+        to_ts: int,
+    ) -> list[dict]:
+        """Get the accrued interest (coupon income) for a bond (F12).
+
+        Parameters
+        ----------
+        instrument_id : str
+            Instrument identifier (figi/uid/ticker_class).
+        from_ts : int
+            Start time as unix nanos.
+        to_ts : int
+            End time as unix nanos.
+
+        Returns
+        -------
+        list[dict]
+            List of accrued interest dicts with date, value, value_percent, nominal.
+
+        """
+        if self._native is not None:
+            return await self._native.get_accrued_interests(
+                instrument_id=instrument_id,
+                from_ts=from_ts,
+                to_ts=to_ts,
+            )
+        logger.warning("get_accrued_interests: native client not available")
+        return []
+
     async def get_accounts(self) -> list[dict]:
         """Get user accounts.
 

@@ -501,3 +501,72 @@ class TInvestInstrumentProvider(InstrumentProvider):
 
     def get_instruments(self) -> dict[str, object]:
         return self._instruments
+
+    async def find_instrument(
+        self,
+        figi: str | None = None,
+        ticker: str | None = None,
+        instrument_id: str | None = None,
+    ) -> object | None:
+        """Find an instrument by figi, ticker, or instrument_id (F10).
+
+        Uses the T-Invest ``GetInstrumentBy`` endpoint and caches the result.
+
+        Parameters
+        ----------
+        figi : str, optional
+            The instrument FIGI.
+        ticker : str, optional
+            The instrument ticker.
+        instrument_id : str, optional
+            The instrument UID / universal identifier.
+
+        Returns
+        -------
+        object | None
+            The nautilus ``Instrument`` or None if not found.
+
+        """
+        if self._grpc_client is None:
+            logger.warning("No gRPC client available, cannot find instrument")
+            return None
+
+        # Determine the lookup key and id_type
+        key: str | None = None
+        id_type: int | None = None
+        if figi:
+            key = figi
+            id_type = 1  # INSTRUMENT_ID_TYPE_FIGI
+        elif instrument_id:
+            key = instrument_id
+            id_type = 5  # INSTRUMENT_ID_TYPE_ID
+        elif ticker:
+            key = ticker
+            id_type = 2  # INSTRUMENT_ID_TYPE_TICKER
+
+        if not key or id_type is None:
+            logger.warning("find_instrument: no figi/ticker/instrument_id provided")
+            return None
+
+        try:
+            result = await self._grpc_client.get_instrument_by(
+                id_type=id_type,
+                id=key,
+                class_code=None,
+            )
+            if result is None or not result:
+                logger.warning(f"Instrument not found: {key}")
+                return None
+
+            instrument = _try_dict_to_instrument(result)
+            if instrument is None:
+                logger.warning(f"Could not convert instrument: {key}")
+                return None
+
+            instrument_id_str = str(instrument.id)
+            self._instruments[instrument_id_str] = instrument
+            logger.info(f"Found instrument: {instrument_id_str}")
+            return instrument
+        except Exception as e:
+            logger.warning(f"Failed to find instrument {key}: {e}")
+            return None
