@@ -24,6 +24,7 @@ logs/
 *.key
 *.key_secret
 *.env
+.envrc
 
 # Compressed files
 *.tar.gz*
@@ -199,6 +200,8 @@ tests/unit_tests/persistence/catalog/
 tests/test_data/**/backtest/**
 
 
+# Local vendored libs (t-invest gitlinks removed)
+libs/
 # Exceptions
 !tests/test_data/large/checksums.json
 !tests/test_data/large/*.metadata.json
