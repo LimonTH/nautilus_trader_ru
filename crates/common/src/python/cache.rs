@@ -1414,7 +1414,7 @@ impl Cache {
     /// Resets the cache.
     ///
     /// All stateful fields are reset to their initial value. Instruments,
-    /// currencies and synthetics are retained when `drop_instruments_on_reset`
+    /// currencies, and synthetics are retained when `drop_instruments_on_reset`
     /// is `false` so that repeated backtest runs can reuse the same dataset.
     #[pyo3(name = "reset")]
     fn py_reset(&mut self) {
@@ -2761,7 +2761,11 @@ impl Cache {
         self.set_mark_xrate(from_currency, to_currency, xrate);
     }
 
-    /// Clears the mark exchange rate for the given currency pair.
+    /// Clears the mark exchange rate for the given currency pair direction.
+    ///
+    /// Removes only the `(from_currency, to_currency)` entry; the inverse rate written
+    /// by `Self.set_mark_xrate` is retained until cleared separately or
+    /// `Self.clear_mark_xrates` is called.
     #[pyo3(name = "clear_mark_xrate")]
     fn py_clear_mark_xrate(&mut self, from_currency: Currency, to_currency: Currency) {
         self.clear_mark_xrate(from_currency, to_currency);

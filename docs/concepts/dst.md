@@ -120,8 +120,8 @@ The contract holds only when all of the following are true:
 - Wall-clock time reads route through `nautilus_core::time::duration_since_unix_epoch`.
 - Randomness routes through `madsim::rand`. `rand::thread_rng`, `rand::rng()`, `fastrand`,
   `getrandom`, and `OsRng` are not intercepted.
-- Iteration-order-sensitive collections use `IndexMap` or `IndexSet`, not `AHashMap` or
-  `AHashSet`.
+- Iteration-order-sensitive collections either use `IndexMap` or `IndexSet`, or sort at the
+  point of use.
 - `tokio::task::LocalSet` construction is cfg-gated out under simulation. `madsim` does not
   provide `LocalSet`; `spawn_local` works without it.
 - `tokio::task::spawn_blocking` call sites are cfg-gated or removed. A blocking call escapes
@@ -138,7 +138,7 @@ Static enforcement has two layers:
   structural checks that Clippy cannot express cleanly.
 
 The hook lives at `.pre-commit-hooks/check_dst_conventions.sh` and runs both in the standard
-pre-commit suite and in CI. Rules 1 to 6 apply to the 16 in-scope workspace crates; Rule 7 applies
+pre‑commit suite and in CI. Rules 1 to 6 apply to the 17 in‑scope workspace crates; Rule 7 applies
 to the nine crates on the madsim build path. The hook fails the commit when a rule detects:
 
 - **Rule 1**: raw `std::time::Instant::now()`, `SystemTime::now()`, or `chrono::Utc::now()` reads,
@@ -174,9 +174,10 @@ Test files, files under `tests/`, `python/`, and `ffi/` directories, and lines i
 
 ### In-scope crates
 
-The hook applies to the 16 workspace crates in the transitive closure of `nautilus-live`:
-`analysis`, `common`, `core`, `cryptography`, `data`, `execution`, `indicators`, `live`, `model`,
-`network`, `persistence`, `portfolio`, `risk`, `serialization`, `system`, and `trading`.
+The hook applies to 17 workspace crates: the 16 crates in the transitive closure of `nautilus-live`
+(`analysis`, `common`, `core`, `cryptography`, `data`, `execution`, `indicators`, `live`, `model`,
+`network`, `persistence`, `portfolio`, `risk`, `serialization`, `system`, and `trading`), plus
+`backtest`.
 
 Adapter crates and infrastructure crates (Redis, Postgres) are out of scope. Their DST
 suitability requires a separate audit before they enter the DST path.
@@ -250,6 +251,11 @@ the iteration order is observable on the DST path:
   `BookSnapshotInfos`. Iterated removes use `.shift_remove()`.
 - **Execution engine** (`crates/execution/src/engine/`): `ExecutionEngine.clients`, plus
   the `client_ids` / `venues` accumulators in `get_clients_for_orders()`.
+- **Backtest engine and exchange** (`crates/backtest/src/engine.rs`,
+  `crates/backtest/src/exchange.rs`): `BacktestEngine.venues` and
+  `SimulatedExchange.matching_engines` preserve venue and instrument iteration order for
+  settlement, expiration, liquidation, and seeded `FillModel` draws
+  ([#4480](https://github.com/nautechsystems/nautilus_trader/issues/4480)).
 - **Trading algorithm** (`crates/trading/src/algorithm/core.rs`):
   `strategy_event_handlers` (drives ordered `msgbus::unsubscribe_*` fan-out).
 - **Analyzer** (`crates/analysis/src/analyzer.rs`): `account_balances`,
@@ -257,11 +263,22 @@ the iteration order is observable on the DST path:
 - **Cache API** (`crates/common/src/cache/mod.rs`): `get_orders_for_ids` and
   `get_positions_for_ids` sort their `Vec` returns by `client_order_id` / `position_id`
   before returning. Storage stays on `AHashSet` (set semantics).
+- **Instrument store** (`crates/common/src/providers.rs`): `InstrumentStore.instruments`,
+  because the Betfair, Derive, and Polymarket adapters publish one `DataEvent::Instrument`
+  per entry straight from `get_all()` / `list_all()`. Keeps the `ahash` hasher.
+- **Order emulator** (`crates/execution/src/order_emulator/emulator.rs`): `on_reset` sorts
+  the drained `subscribed_quotes`, `subscribed_trades`, and `subscribed_strategies` before
+  the `msgbus::unsubscribe_*` fan-out. The quote and trade paths also advance the seeded
+  `UUID4::new` draw sequence. Storage stays on `AHashSet`.
+- **WebSocket subscriptions** (`crates/network/src/websocket/subscription.rs`):
+  `topics_from_map` sorts its `Vec` return, which fixes the reconnect replay order behind
+  `all_topics()`. Storage stays on `DashMap` with `AHashSet` values.
 
-Remaining `AHashMap` / `AHashSet` sites in the in-scope crates are lookup-only, behind
-concurrent shared-ownership wrappers (`Arc<DashMap>`, `AtomicMap`), or feed into
-commutative aggregation. Any new in-scope site that drives observable iteration order
-is a regression that the per-area audit guards against.
+Remaining `AHashMap` / `AHashSet` sites in the original `nautilus-live` closure are lookup‑only,
+behind concurrent shared‑ownership wrappers (`Arc<DashMap>`, `AtomicMap`), or feed into commutative
+aggregation. `backtest` retains additional hash collections outside rule 5's two‑file enforcement
+scope, including pre‑run validation and result maps. Treat their iteration order as outside the
+static guarantee until each path is audited.
 
 ### Time seams
 
@@ -450,7 +467,7 @@ else, the pre-existing test layers are the right tool.
   for `time`, `task`, `runtime`, and `signal`. Production call sites for `time`, `task`, and
   `runtime` route through the seam; signal call-site adoption is partial (see
   [Signal handling](#signal-handling)).
-- Layer 2 (nondeterminism substitution) is implemented across the 16 in-scope crates. Seams
+- Layer 2 (nondeterminism substitution) is implemented across the 17 in‑scope crates. Seams
   exist for wall-clock time, monotonic time, randomness, and iteration order.
   [Implementation notes](#implementation-notes) enumerates the audit closures and the remaining
   allowed call sites.

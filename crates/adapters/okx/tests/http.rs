@@ -83,6 +83,7 @@ struct TestServerState {
     last_pending_orders_query: Arc<tokio::sync::Mutex<Option<HashMap<String, String>>>>,
     last_order_history_query: Arc<tokio::sync::Mutex<Option<HashMap<String, String>>>>,
     last_order_detail_query: Arc<tokio::sync::Mutex<Option<HashMap<String, String>>>>,
+    mark_price_queries: Arc<tokio::sync::Mutex<Vec<HashMap<String, String>>>>,
     option_summary_queries: Arc<tokio::sync::Mutex<Vec<HashMap<String, String>>>>,
     option_summary_response: Arc<tokio::sync::Mutex<Option<Value>>>,
     price_limit_queries: Arc<tokio::sync::Mutex<Vec<HashMap<String, String>>>>,
@@ -96,6 +97,7 @@ struct TestServerState {
     spread_orders_history_response: Arc<tokio::sync::Mutex<Option<Value>>>,
     spread_trades_response: Arc<tokio::sync::Mutex<Option<Value>>>,
     event_series_queries: Arc<tokio::sync::Mutex<Vec<HashMap<String, String>>>>,
+    algo_details_queries: Arc<tokio::sync::Mutex<Vec<HashMap<String, String>>>>,
     algo_pending_queries: Arc<tokio::sync::Mutex<Vec<HashMap<String, String>>>>,
     algo_history_queries: Arc<tokio::sync::Mutex<Vec<HashMap<String, String>>>>,
     last_order_body: Arc<tokio::sync::Mutex<Option<Value>>>,
@@ -351,6 +353,8 @@ fn create_router(state: Arc<TestServerState>) -> Router {
     let order_detail_state = state.clone();
     let order_place_state = state.clone();
     let order_cancel_state = state.clone();
+    let mark_price_state = state.clone();
+    let algo_details_state = state.clone();
     let algo_pending_state = state.clone();
     let algo_history_state = state.clone();
     let positions_state = state.clone();
@@ -639,7 +643,21 @@ fn create_router(state: Arc<TestServerState>) -> Router {
         )
         .route(
             "/api/v5/public/mark-price",
-            get(|| async { Json(load_test_data("http_get_mark_price.json")) }),
+            get(move |Query(params): Query<HashMap<String, String>>| {
+                let state = mark_price_state.clone();
+                async move {
+                    state.mark_price_queries.lock().await.push(params.clone());
+                    if params.get("instType").map(String::as_str) != Some("SWAP") {
+                        return Json(json!({
+                            "code": "51000",
+                            "msg": "Parameter instType error",
+                            "data": [],
+                        }));
+                    }
+
+                    Json(load_test_data("http_get_mark_price.json"))
+                }
+            }),
         )
         .route(
             "/api/v5/public/opt-summary",
@@ -868,6 +886,15 @@ fn create_router(state: Arc<TestServerState>) -> Router {
 
                         state.algo_pending_queries.lock().await.push(params.clone());
 
+                        if params.contains_key("state") {
+                            return Json(json!({
+                                "code": "51000",
+                                "msg": "Parameter state error",
+                                "data": [],
+                            }))
+                            .into_response();
+                        }
+
                         if params.get("algoClOrdId").map(String::as_str) == Some("O-attached-oco") {
                             if params.get("ordType").map(String::as_str) != Some("oco") {
                                 return (
@@ -952,14 +979,50 @@ fn create_router(state: Arc<TestServerState>) -> Router {
                             .into_response();
                         }
 
-                        Json(load_test_data("http_get_orders_algo_history.json")).into_response()
+                        let mut response = load_test_data("http_get_orders_algo_history.json");
+                        if let Some(requested_state) = params.get("state") {
+                            response["data"][0]["state"] = json!(requested_state);
+                        }
+
+                        Json(response).into_response()
                     }
                 },
             ),
         )
         .route(
             "/api/v5/trade/order-algo",
-            post(move |headers: HeaderMap, Json(payload): Json<Value>| {
+            get(
+                move |headers: HeaderMap, Query(params): Query<HashMap<String, String>>| {
+                    let state = algo_details_state.clone();
+                    async move {
+                        if !has_auth_headers(&headers) {
+                            return (
+                                StatusCode::UNAUTHORIZED,
+                                Json(json!({
+                                    "code": "401",
+                                    "msg": "Missing authentication headers",
+                                    "data": [],
+                                })),
+                            )
+                                .into_response();
+                        }
+
+                        let fixture = match params.get("algoClOrdId").map(String::as_str) {
+                            Some("O-attached-oco") => {
+                                "http_get_orders_algo_pending_attached_oco.json"
+                            }
+                            Some("O-close-frac-status") => {
+                                "http_get_orders_algo_pending_close_fraction.json"
+                            }
+                            _ => "http_get_orders_algo_history.json",
+                        };
+
+                        state.algo_details_queries.lock().await.push(params);
+                        Json(load_test_data(fixture)).into_response()
+                    }
+                },
+            )
+            .post(move |headers: HeaderMap, Json(payload): Json<Value>| {
                 let state = algo_order_state.clone();
                 async move {
                     if !has_auth_headers(&headers) {
@@ -3762,7 +3825,7 @@ async fn test_http_request_algo_order_status_report_parses_close_fraction_condit
 
 #[rstest]
 #[tokio::test]
-async fn test_http_request_algo_order_status_report_queries_attached_oco_with_ord_type() {
+async fn test_http_request_algo_order_status_report_queries_attached_oco_details() {
     let state = Arc::new(TestServerState::default());
     let addr = start_test_server(state.clone()).await;
     let base_url = format!("http://{addr}");
@@ -3799,22 +3862,178 @@ async fn test_http_request_algo_order_status_report_queries_attached_oco_with_or
         report.client_order_id,
         Some(ClientOrderId::from("O-attached-oco"))
     );
-    assert!(report.trigger_price.is_some());
+    assert_eq!(report.trigger_price, Some(Price::from("41000")));
 
+    let details_queries = state.algo_details_queries.lock().await.clone();
     let pending_queries = state.algo_pending_queries.lock().await.clone();
+    let history_queries = state.algo_history_queries.lock().await.clone();
+
+    assert_eq!(details_queries.len(), 1);
+    assert_eq!(
+        details_queries[0].get("algoClOrdId").map(String::as_str),
+        Some("O-attached-oco")
+    );
+    assert!(pending_queries.is_empty());
+    assert!(history_queries.is_empty());
+}
+
+#[rstest]
+#[tokio::test]
+async fn test_http_request_algo_order_status_reports_routes_live_state_to_pending() {
+    let state = Arc::new(TestServerState::default());
+    let addr = start_test_server(state.clone()).await;
+    let base_url = format!("http://{addr}");
+
+    let client = OKXHttpClient::with_credentials(
+        Some("test_key".to_string()),
+        Some("test_secret".to_string()),
+        Some("test_passphrase".to_string()),
+        Some(base_url),
+        60,
+        3,
+        1000,
+        10_000,
+        OKXEnvironment::Live,
+        None,
+    )
+    .unwrap();
+
+    for instrument in load_swap_instruments_any() {
+        client.cache_instrument(instrument);
+    }
+
+    let reports = client
+        .request_algo_order_status_reports(
+            AccountId::new("OKX-001"),
+            Some(OKXInstrumentType::Swap),
+            None,
+            None,
+            None,
+            Some(OKXAlgoOrderStatus::Live),
+            Some(100),
+        )
+        .await
+        .unwrap();
+    let pending_queries = state.algo_pending_queries.lock().await.clone();
+    let history_queries = state.algo_history_queries.lock().await.clone();
+
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].order_status, OrderStatus::Accepted);
+    assert!(!pending_queries.is_empty());
     assert!(
         pending_queries
             .iter()
-            .any(|query| query.get("ordType").map(String::as_str) == Some("oco")),
-        "expected at least one pending algo query with ordType=oco, found {pending_queries:?}",
+            .all(|query| !query.contains_key("state"))
     );
+    assert!(history_queries.is_empty());
+}
 
-    // algoClOrdId-only lookup must skip history: OKX rejects it with 50015.
+#[rstest]
+#[tokio::test]
+async fn test_http_request_algo_order_status_reports_routes_canceled_state_to_history() {
+    let state = Arc::new(TestServerState::default());
+    let addr = start_test_server(state.clone()).await;
+    let base_url = format!("http://{addr}");
+
+    let client = OKXHttpClient::with_credentials(
+        Some("test_key".to_string()),
+        Some("test_secret".to_string()),
+        Some("test_passphrase".to_string()),
+        Some(base_url),
+        60,
+        3,
+        1000,
+        10_000,
+        OKXEnvironment::Live,
+        None,
+    )
+    .unwrap();
+
+    for instrument in load_swap_instruments_any() {
+        client.cache_instrument(instrument);
+    }
+
+    let reports = client
+        .request_algo_order_status_reports(
+            AccountId::new("OKX-001"),
+            Some(OKXInstrumentType::Swap),
+            None,
+            None,
+            None,
+            Some(OKXAlgoOrderStatus::Canceled),
+            Some(100),
+        )
+        .await
+        .unwrap();
+    let pending_queries = state.algo_pending_queries.lock().await.clone();
     let history_queries = state.algo_history_queries.lock().await.clone();
+
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].order_status, OrderStatus::Canceled);
+    assert!(pending_queries.is_empty());
+    assert!(!history_queries.is_empty());
     assert!(
-        history_queries.is_empty(),
-        "expected no algo history queries for an algoClOrdId-only lookup, found {history_queries:?}",
+        history_queries
+            .iter()
+            .all(|query| { query.get("state").map(String::as_str) == Some("canceled") })
     );
+}
+
+#[rstest]
+#[tokio::test]
+async fn test_http_request_algo_order_status_reports_uses_details_for_exact_lookup() {
+    let state = Arc::new(TestServerState::default());
+    let addr = start_test_server(state.clone()).await;
+    let base_url = format!("http://{addr}");
+
+    let client = OKXHttpClient::with_credentials(
+        Some("test_key".to_string()),
+        Some("test_secret".to_string()),
+        Some("test_passphrase".to_string()),
+        Some(base_url),
+        60,
+        3,
+        1000,
+        10_000,
+        OKXEnvironment::Live,
+        None,
+    )
+    .unwrap();
+
+    for instrument in load_swap_instruments_any() {
+        client.cache_instrument(instrument);
+    }
+
+    let reports = client
+        .request_algo_order_status_reports(
+            AccountId::new("OKX-001"),
+            None,
+            Some(InstrumentId::from("ETH-USDT-SWAP.OKX")),
+            Some("987654321".to_string()),
+            None,
+            None,
+            Some(1),
+        )
+        .await
+        .unwrap();
+    let details_queries = state.algo_details_queries.lock().await.clone();
+    let pending_queries = state.algo_pending_queries.lock().await.clone();
+    let history_queries = state.algo_history_queries.lock().await.clone();
+
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].venue_order_id.as_str(), "ord_456");
+    assert_eq!(
+        reports[0].client_order_id,
+        Some(ClientOrderId::from("cl_ord_123"))
+    );
+    assert_eq!(reports[0].order_status, OrderStatus::Triggered);
+    assert_eq!(details_queries.len(), 1);
+    assert_eq!(
+        details_queries[0].get("algoId").map(String::as_str),
+        Some("987654321")
+    );
+    assert!(pending_queries.is_empty());
+    assert!(history_queries.is_empty());
 }
 
 #[rstest]
@@ -5639,6 +5858,42 @@ async fn test_http_request_price_limit_uses_instrument_symbol() {
 
     let queries = state.price_limit_queries.lock().await;
     assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].get("instId"), Some(&"BTC-USDT-SWAP".to_string()));
+}
+
+#[rstest]
+#[tokio::test]
+async fn test_http_request_mark_price_uses_instrument_type_and_symbol() {
+    let state = Arc::new(TestServerState::default());
+    let addr = start_test_server(state.clone()).await;
+    let base_url = format!("http://{addr}");
+    let client = OKXHttpClient::new(
+        Some(base_url),
+        60,
+        3,
+        1000,
+        10_000,
+        OKXEnvironment::Live,
+        None,
+    )
+    .unwrap();
+
+    for instrument in load_swap_instruments_any() {
+        client.cache_instrument(instrument);
+    }
+
+    let mark = client
+        .request_mark_price(InstrumentId::from("BTC-USDT-SWAP.OKX"))
+        .await
+        .unwrap();
+
+    assert_eq!(mark.instrument_id, InstrumentId::from("BTC-USDT-SWAP.OKX"));
+    assert_eq!(mark.value, Price::from("84660.1"));
+    assert_eq!(mark.ts_event, UnixNanos::from(1_744_590_349_506_000_000));
+
+    let queries = state.mark_price_queries.lock().await;
+    assert_eq!(queries.len(), 1);
+    assert_eq!(queries[0].get("instType"), Some(&"SWAP".to_string()));
     assert_eq!(queries[0].get("instId"), Some(&"BTC-USDT-SWAP".to_string()));
 }
 

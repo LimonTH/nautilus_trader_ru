@@ -16,11 +16,25 @@
 //! Integration tests for `OKXExecutionClient`.
 
 use std::{
-    cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc, sync::Arc, time::Duration,
+    cell::RefCell,
+    collections::HashMap,
+    net::SocketAddr,
+    rc::Rc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
 };
 
 use ahash::AHashMap;
-use axum::{Json, Router, extract::Query, http::HeaderMap, response::IntoResponse, routing::get};
+use axum::{
+    Json, Router,
+    extract::Query,
+    http::HeaderMap,
+    response::IntoResponse,
+    routing::{get, post},
+};
 use nautilus_common::{
     cache::Cache,
     clients::ExecutionClient,
@@ -38,7 +52,10 @@ use nautilus_common::{
 use nautilus_core::{AtomicMap, UUID4, UnixNanos, time::get_atomic_clock_realtime};
 use nautilus_live::{ExecutionClientCore, ExecutionEventEmitter};
 use nautilus_model::{
-    enums::{AccountType, LiquiditySide, OmsType, OrderSide, OrderStatus, OrderType, TimeInForce},
+    enums::{
+        AccountType, LiquiditySide, OmsType, OrderSide, OrderStatus, OrderType, TimeInForce,
+        TriggerType,
+    },
     events::{OrderEventAny, OrderInitialized},
     identifiers::{
         AccountId, ClientOrderId, InstrumentId, OrderListId, StrategyId, Symbol, TradeId, TraderId,
@@ -376,6 +393,63 @@ async fn test_local_submit_validation_failure_emits_order_rejected() {
         }
         other => panic!("expected OrderRejected event, was {other:?}"),
     }
+}
+
+#[rstest]
+#[tokio::test]
+async fn test_algo_submit_timeout_does_not_emit_order_rejected() {
+    let (addr, requests) = start_exec_submit_timeout_test_server().await;
+    let base_url = format!("http://{addr}");
+    let (mut client, mut rx, cache) = create_test_execution_client(&base_url);
+    client.on_instrument(crypto_perpetual_ethusdt().into());
+
+    client.start().unwrap();
+    let _ = drain_events(&mut rx);
+
+    let client_order_id = ClientOrderId::new("OALGOTIMEOUT1");
+    let order = build_test_stop_order(client_order_id);
+    cache
+        .borrow_mut()
+        .add_order(order.clone(), None, Some(*OKX_CLIENT_ID), false)
+        .unwrap();
+    let cmd = SubmitOrder::from_order(
+        &order,
+        TraderId::from("TESTER-001"),
+        Some(*OKX_CLIENT_ID),
+        None,
+        UUID4::new(),
+        UnixNanos::default(),
+    );
+
+    client.submit_order(cmd).unwrap();
+
+    wait_until_async(
+        || async { requests.load(Ordering::Relaxed) == 1 },
+        Duration::from_secs(5),
+    )
+    .await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let events = drain_events(&mut rx);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(
+                event,
+                ExecutionEvent::Order(OrderEventAny::Submitted(submitted))
+                    if submitted.client_order_id == client_order_id
+            ))
+            .count(),
+        1,
+    );
+    assert!(
+        !contains_order_event(&events, |event| matches!(
+            event,
+            OrderEventAny::Rejected(rejected)
+                if rejected.client_order_id == client_order_id
+        )),
+        "ambiguous algo submit failure should not emit OrderRejected: {events:?}",
+    );
 }
 
 #[rstest]
@@ -1274,6 +1348,45 @@ fn test_dispatch_tracked_post_only_cancel_from_fixture(
         order_instrument(expected_instrument_type, instrument_id, raw_symbol),
     );
 
+    let (untracked_emitter, mut untracked_rx) = test_emitter();
+    let untracked_state = WsDispatchState::default();
+    let mut untracked_fee_cache = AHashMap::new();
+    let mut untracked_filled_qty_cache = AHashMap::new();
+    let mut untracked_order_state_cache = AHashMap::new();
+
+    dispatch_ws_message(
+        OKXWsMessage::Orders(vec![message.clone()]),
+        &untracked_emitter,
+        &untracked_state,
+        AccountId::from("OKX-001"),
+        &instruments,
+        &mut untracked_fee_cache,
+        &mut untracked_filled_qty_cache,
+        &mut untracked_order_state_cache,
+        get_atomic_clock_realtime(),
+    );
+
+    let untracked_events = drain_events(&mut untracked_rx);
+    assert_eq!(untracked_events.len(), 1);
+    match &untracked_events[0] {
+        ExecutionEvent::Report(CommonExecutionReport::Order(report)) => {
+            assert_eq!(report.account_id, AccountId::from("OKX-001"));
+            assert_eq!(report.instrument_id, instrument_id);
+            assert_eq!(report.client_order_id, Some(client_order_id));
+            assert_eq!(report.venue_order_id, VenueOrderId::new(venue_order_id));
+            assert_eq!(report.order_side, OrderSide::Buy);
+            assert_eq!(report.order_type, OrderType::Limit);
+            assert_eq!(report.time_in_force, TimeInForce::Gtc);
+            assert_eq!(report.order_status, OrderStatus::Canceled);
+            assert!(report.post_only);
+            assert_eq!(
+                report.cancel_reason.as_deref(),
+                Some(OKX_POST_ONLY_CANCEL_REASON),
+            );
+        }
+        other => panic!("Expected first-seen untracked order status report, was {other:?}"),
+    }
+
     let venue_order_id_key = Ustr::from(venue_order_id);
     let mut fee_cache = AHashMap::new();
     fee_cache.insert(venue_order_id_key, Money::new(1.25, Currency::from("USDT")));
@@ -1338,11 +1451,10 @@ fn test_dispatch_tracked_post_only_cancel_from_fixture(
     );
 
     let replay_events = drain_events(&mut rx);
-    assert!(
-        !replay_events
-            .iter()
-            .any(|event| matches!(event, ExecutionEvent::Order(_))),
-        "replay should not emit another order event: {replay_events:?}",
+    assert_eq!(
+        replay_events.len(),
+        0,
+        "replay should not emit another execution event: {replay_events:?}",
     );
 }
 
@@ -1981,6 +2093,44 @@ async fn start_exec_test_server() -> SocketAddr {
     addr
 }
 
+async fn start_exec_submit_timeout_test_server() -> (SocketAddr, Arc<AtomicUsize>) {
+    let requests = Arc::new(AtomicUsize::new(0));
+    let route_requests = Arc::clone(&requests);
+    let router = create_exec_test_router().route(
+        "/api/v5/trade/order-algo",
+        post(move |_headers: HeaderMap| {
+            let requests = Arc::clone(&route_requests);
+            async move {
+                requests.fetch_add(1, Ordering::Relaxed);
+                Json(load_test_data("http_place_algo_order_timeout.json"))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(listener, router.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    let health_url = format!("http://{addr}/api/v5/account/balance");
+    let http_client =
+        HttpClient::new(HashMap::new(), Vec::new(), Vec::new(), None, None, None).unwrap();
+    wait_until_async(
+        || {
+            let url = health_url.clone();
+            let client = http_client.clone();
+            async move { client.get(url, None, None, Some(1), None).await.is_ok() }
+        },
+        Duration::from_secs(5),
+    )
+    .await;
+
+    (addr, requests)
+}
+
 async fn start_exec_report_test_server(state: Arc<ReportRouteState>) -> SocketAddr {
     let router = create_exec_report_test_router(state);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2312,6 +2462,20 @@ fn build_test_limit_order(instrument_id: InstrumentId, client_order_id: ClientOr
         .side(OrderSide::Buy)
         .price(Price::from("2000.00"))
         .quantity(Quantity::from("1"))
+        .time_in_force(TimeInForce::Gtc)
+        .build()
+}
+
+fn build_test_stop_order(client_order_id: ClientOrderId) -> OrderAny {
+    OrderTestBuilder::new(OrderType::StopMarket)
+        .trader_id(TraderId::from("TESTER-001"))
+        .strategy_id(StrategyId::from("STRATEGY-001"))
+        .instrument_id(InstrumentId::from("ETH-USDT-SWAP.OKX"))
+        .client_order_id(client_order_id)
+        .side(OrderSide::Sell)
+        .quantity(Quantity::from("1"))
+        .trigger_price(Price::from("1000.00"))
+        .trigger_type(TriggerType::MarkPrice)
         .time_in_force(TimeInForce::Gtc)
         .build()
 }
