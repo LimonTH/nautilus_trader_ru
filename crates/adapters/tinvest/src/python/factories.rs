@@ -1391,7 +1391,7 @@ impl PyTInvestGrpcClient {
     // -----------------------------------------------------------------------
 
     /// Post a stop-order.
-    #[pyo3(signature = (account_id, figi, quantity, order_id, price=None, stop_price=None, direction=1, expiration_type=1, stop_order_type=1))]
+    #[pyo3(signature = (account_id, figi, quantity, order_id, price=None, stop_price=None, direction=1, expiration_type=1, stop_order_type=1, exchange_order_type=0, take_profit_type=0))]
     pub fn post_stop_order<'py>(
         &mut self,
         py: Python<'py>,
@@ -1404,6 +1404,8 @@ impl PyTInvestGrpcClient {
         direction: i32,
         expiration_type: i32,
         stop_order_type: i32,
+        exchange_order_type: i32,
+        take_profit_type: i32,
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -1436,8 +1438,8 @@ impl PyTInvestGrpcClient {
                 instrument_id: figi.clone(),
                 order_id: order_id.clone(),
                 expire_date: None,
-                exchange_order_type: 0,
-                take_profit_type: 0,
+                exchange_order_type,
+                take_profit_type,
                 trailing_data: None,
                 price_type: 0,
                 confirm_margin_trade: false,
@@ -1497,6 +1499,100 @@ impl PyTInvestGrpcClient {
                 d.set_item(
                     "time",
                     resp.time.as_ref().map(|t| t.seconds).unwrap_or(0),
+                )?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
+    /// Replace an existing stop-order (F4).
+    ///
+    /// The T-Invest StopOrdersService has no ``ReplaceStopOrder`` RPC, so a
+    /// replacement is implemented as *cancel the old stop-order* followed by
+    /// *submit a new stop-order* with the updated parameters.
+    #[pyo3(signature = (account_id, stop_order_id, figi, quantity, order_id, price=None, stop_price=None, direction=1, expiration_type=1, stop_order_type=1, exchange_order_type=0, take_profit_type=0))]
+    pub fn replace_stop_order<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        stop_order_id: String,
+        figi: String,
+        quantity: i64,
+        order_id: String,
+        price: Option<f64>,
+        stop_price: Option<f64>,
+        direction: i32,
+        expiration_type: i32,
+        stop_order_type: i32,
+        exchange_order_type: i32,
+        take_profit_type: i32,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut stub = inner.stop_orders().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("stop_orders service: {e}"))
+            })?;
+
+            // 1. Cancel the existing stop-order
+            let cancel_request = proto::CancelStopOrderRequest {
+                account_id: account_id.clone(),
+                stop_order_id: stop_order_id.clone(),
+            };
+            let cancel_req = inner.with_auth(tonic::Request::new(cancel_request));
+            stub.cancel_stop_order(cancel_req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("replace_stop_order cancel: {e}"))
+            })?;
+
+            // 2. Post the replacement stop-order
+            let price_value = price.map(|p| {
+                let units = p.trunc() as i64;
+                let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            });
+            let stop_price_value = stop_price.map(|p| {
+                let units = p.trunc() as i64;
+                let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            });
+
+            #[allow(deprecated)]
+            let post_request = proto::PostStopOrderRequest {
+                figi: None, // deprecated, use instrument_id
+                quantity,
+                price: price_value,
+                stop_price: stop_price_value,
+                direction,
+                account_id: account_id.clone(),
+                expiration_type,
+                stop_order_type,
+                instrument_id: figi.clone(),
+                order_id: order_id.clone(),
+                expire_date: None,
+                exchange_order_type,
+                take_profit_type,
+                trailing_data: None,
+                price_type: 0,
+                confirm_margin_trade: false,
+                instant_execution: None,
+            };
+            let post_req = inner.with_auth(tonic::Request::new(post_request));
+            let response = stub.post_stop_order(post_req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("replace_stop_order post: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item("old_stop_order_id", &stop_order_id)?;
+                d.set_item("stop_order_id", &resp.stop_order_id)?;
+                d.set_item("order_request_id", &resp.order_request_id)?;
+                d.set_item(
+                    "server_time",
+                    resp.response_metadata
+                        .as_ref()
+                        .and_then(|m| m.server_time.as_ref())
+                        .map(|t| t.seconds)
+                        .unwrap_or(0),
                 )?;
                 Ok(d.into_any().unbind())
             })

@@ -98,6 +98,14 @@ _TINVEST_ORDER_TYPE = {
     3: OrderType.MARKET,
 }
 
+# Nautilus order types that are routed to T-Invest PostStopOrder (F3)
+_STOP_ORDER_TYPES = {
+    OrderType.STOP_MARKET,
+    OrderType.STOP_LIMIT,
+    OrderType.MARKET_IF_TOUCHED,
+    OrderType.LIMIT_IF_TOUCHED,
+}
+
 
 def _safe_extract_price(raw, default_precision: int = 2) -> "ModelPrice":
     """
@@ -493,6 +501,16 @@ class TInvestExecutionClient(LiveExecutionClient):
         # Map side to T-Invest direction
         direction = 1 if side == OrderSide.BUY else 2
 
+        # F3: stop-orders are routed to T-Invest PostStopOrder
+        if order_type in _STOP_ORDER_TYPES:
+            await self._submit_stop_order(
+                command=command,
+                figi=figi,
+                direction=direction,
+                qty=qty,
+            )
+            return
+
         # Map order type to T-Invest type (1=Limit, 2=Market, 3=BestPrice)
         tinvest_type = self._map_order_type(order_type, command.instrument_id)
         price = None
@@ -611,6 +629,113 @@ class TInvestExecutionClient(LiveExecutionClient):
         from nautilus_trader.model.instruments import OptionContract
 
         return isinstance(instrument, OptionContract)
+
+    async def _submit_stop_order(
+        self,
+        command: SubmitOrder,
+        figi: str,
+        direction: int,
+        qty,
+    ) -> None:
+        """Submit a stop-order via T-Invest PostStopOrder (F3).
+
+        Maps Nautilus stop order types to T-Invest stop-order parameters:
+
+        - ``STOP_MARKET``        → StopLoss (Market child order)
+        - ``STOP_LIMIT``         → StopLimit (Limit child order)
+        - ``MARKET_IF_TOUCHED``  → TakeProfit (Market child order)
+        - ``LIMIT_IF_TOUCHED``   → TakeProfit (Limit child order)
+
+        Emits ``rejected``/``submitted``/``accepted`` events accordingly.
+
+        """
+        order = command.order
+        order_type = order.order_type
+        client_order_id = command.client_order_id
+
+        trigger_price = (
+            float(order.trigger_price.as_f64()) if order.trigger_price is not None else None
+        )
+        limit_price = (
+            float(order.price.as_f64()) if order.price is not None else None
+        )
+
+        # Map Nautilus stop type → T-Invest (stop_order_type, exchange_order_type)
+        if order_type == OrderType.STOP_MARKET:
+            stop_order_type = 2  # STOP_LOSS
+            exchange_order_type = 1  # MARKET
+            price = None
+            stop_price = trigger_price
+        elif order_type == OrderType.STOP_LIMIT:
+            stop_order_type = 3  # STOP_LIMIT
+            exchange_order_type = 2  # LIMIT
+            price = limit_price
+            stop_price = trigger_price
+        elif order_type == OrderType.MARKET_IF_TOUCHED:
+            stop_order_type = 1  # TAKE_PROFIT
+            exchange_order_type = 1  # MARKET
+            price = None
+            stop_price = trigger_price
+        elif order_type == OrderType.LIMIT_IF_TOUCHED:
+            stop_order_type = 1  # TAKE_PROFIT
+            exchange_order_type = 2  # LIMIT
+            price = limit_price
+            stop_price = trigger_price
+        else:
+            self.generate_order_rejected(
+                client_order_id=client_order_id,
+                reason=f"Unsupported stop order type: {order_type}",
+                ts_event=self._clock.timestamp_ns(),
+            )
+            return
+
+        self._log.info(
+            f"Submitting stop-order: figi={figi}, direction={direction}, "
+            f"qty={qty}, stop_order_type={stop_order_type}, "
+            f"exchange_order_type={exchange_order_type}, trigger={stop_price}",
+        )
+
+        try:
+            result = await self._client.post_stop_order(
+                account_id=self._account_str,
+                figi=figi,
+                quantity=int(float(qty)),
+                order_id=str(client_order_id),
+                price=price,
+                stop_price=stop_price,
+                direction=direction,
+                expiration_type=1,  # GOOD_TILL_CANCEL
+                stop_order_type=stop_order_type,
+                exchange_order_type=exchange_order_type,
+                take_profit_type=1 if stop_order_type == 1 else 0,
+            )
+
+            if result is not None:
+                stop_order_id = result.get("stop_order_id", "")
+                self._log.info(
+                    f"Stop-order submitted: stop_order_id={stop_order_id}",
+                    LogColor.GREEN,
+                )
+
+                self.generate_order_submitted(
+                    client_order_id=client_order_id,
+                    ts_event=self._clock.timestamp_ns(),
+                )
+
+                self.generate_order_accepted(
+                    client_order_id=client_order_id,
+                    venue_order_id=VenueOrderId(stop_order_id),
+                    ts_event=self._clock.timestamp_ns(),
+                )
+            else:
+                self._log.warning("Stop-order submission returned no result")
+        except Exception as e:
+            self._log.error(f"Failed to submit stop-order: {e}")
+            self.generate_order_rejected(
+                client_order_id=client_order_id,
+                reason=str(e),
+                ts_event=self._clock.timestamp_ns(),
+            )
 
     async def _submit_order_list(self, command: SubmitOrderList) -> None:
         self._log.info(

@@ -429,8 +429,14 @@ impl ExecutionClient for TInvestLiveExecutionClient {
         let client_order_id = cmd.client_order_id;
         let quantity = cmd.order_init.quantity.as_f64() as i64;
         let side = order_side_to_tinvest(cmd.order_init.order_side.as_ref());
-        let order_type = order_type_to_tinvest(cmd.order_init.order_type.as_ref());
+        let order_type_str = cmd.order_init.order_type.as_ref().to_string();
+        let order_type = order_type_to_tinvest(&order_type_str);
         let price = cmd.order_init.price.map(|p| p.as_f64()).map(f64_to_quotation);
+        let trigger_price = cmd
+            .order_init
+            .trigger_price
+            .map(|p| p.as_f64())
+            .map(f64_to_quotation);
         let emitter = self.emitter.clone();
         let ts_event = self.clock.get_time_ns();
 
@@ -438,45 +444,106 @@ impl ExecutionClient for TInvestLiveExecutionClient {
         let order = self.core.get_order(&client_order_id)?;
         emitter.emit_order_submitted(&order);
 
+        // F3: stop-orders are routed to StopOrdersService::PostStopOrder
+        let is_stop = matches!(
+            order_type_str.as_str(),
+            "STOP_MARKET" | "STOP_LIMIT" | "MARKET_IF_TOUCHED" | "LIMIT_IF_TOUCHED"
+        );
+
         info!(
-            "Submitting order: figi={}, side={}, qty={}, type={}, client_oid={}",
+            "Submitting order: figi={}, side={}, qty={}, type={}, client_oid={}, stop={is_stop}",
             figi, side, quantity, order_type, client_order_id,
         );
 
         self.spawn_task("submit_order", async move {
-            let mut stub = grpc_client.orders().await?;
-            let request = crate::proto::PostOrderRequest {
-                figi: Some(figi.clone()),
-                quantity,
-                price,
-                direction: side,
-                account_id: account_id.clone(),
-                order_type,
-                order_id: client_order_id.to_string(),
-                instrument_id: figi.clone(),
-                time_in_force: 1,
-                price_type: 2,
-                confirm_margin_trade: false,
-            };
-            let request = grpc_client.with_auth(tonic::Request::new(request));
+            if is_stop {
+                // Map Nautilus stop type → T-Invest (stop_order_type, exchange_order_type)
+                // stop_order_type: 1=TakeProfit, 2=StopLoss, 3=StopLimit
+                // exchange_order_type: 1=Market, 2=Limit
+                let (stop_order_type, exchange_order_type, stop_price, limit_price) =
+                    match order_type_str.as_str() {
+                        "STOP_MARKET" => (2, 1, trigger_price.clone(), None),
+                        "STOP_LIMIT" => (3, 2, trigger_price.clone(), price),
+                        "MARKET_IF_TOUCHED" => (1, 1, trigger_price.clone(), None),
+                        "LIMIT_IF_TOUCHED" => (1, 2, trigger_price.clone(), price),
+                        _ => unreachable!("stop order already checked"),
+                    };
 
-            match stub.post_order(request).await {
-                Ok(response) => {
-                    let resp = response.into_inner();
-                    let venue_order_id = VenueOrderId::new(&resp.order_id);
-                    info!(
-                        "Order submitted successfully: order_id={}, status={}",
-                        resp.order_id,
-                        resp.execution_report_status,
-                    );
-                    emitter.emit_order_accepted(&order, venue_order_id, ts_event);
+                let mut stub = grpc_client.stop_orders().await?;
+                let request = crate::proto::PostStopOrderRequest {
+                    figi: None, // deprecated, use instrument_id
+                    quantity,
+                    price: limit_price,
+                    stop_price,
+                    direction: side,
+                    account_id: account_id.clone(),
+                    expiration_type: 1, // STOP_ORDER_EXPIRATION_TYPE_GOOD_TILL_CANCEL
+                    stop_order_type,
+                    instrument_id: figi.clone(),
+                    order_id: client_order_id.to_string(),
+                    expire_date: None,
+                    exchange_order_type,
+                    take_profit_type: if stop_order_type == 1 { 1 } else { 0 },
+                    trailing_data: None,
+                    price_type: 0,
+                    confirm_margin_trade: false,
+                    instant_execution: None,
+                };
+                let request = grpc_client.with_auth(tonic::Request::new(request));
+
+                match stub.post_stop_order(request).await {
+                    Ok(response) => {
+                        let resp = response.into_inner();
+                        let venue_order_id = VenueOrderId::new(&resp.stop_order_id);
+                        info!(
+                            "Stop-order submitted successfully: stop_order_id={}",
+                            resp.stop_order_id,
+                        );
+                        emitter.emit_order_accepted(&order, venue_order_id, ts_event);
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to submit stop-order: {e} (instrument={figi}, client_oid={client_order_id})",
+                        );
+                        emitter.emit_order_rejected(&order, &format!("{e}"), ts_event, false);
+                        return Err(e.into());
+                    }
                 }
-                Err(e) => {
-                    error!(
-                        "Failed to submit order: {e} (instrument={figi}, client_oid={client_order_id})",
-                    );
-                    emitter.emit_order_rejected(&order, &format!("{e}"), ts_event, false);
-                    return Err(e.into());
+            } else {
+                let mut stub = grpc_client.orders().await?;
+                let request = crate::proto::PostOrderRequest {
+                    figi: Some(figi.clone()),
+                    quantity,
+                    price,
+                    direction: side,
+                    account_id: account_id.clone(),
+                    order_type,
+                    order_id: client_order_id.to_string(),
+                    instrument_id: figi.clone(),
+                    time_in_force: 1,
+                    price_type: 2,
+                    confirm_margin_trade: false,
+                };
+                let request = grpc_client.with_auth(tonic::Request::new(request));
+
+                match stub.post_order(request).await {
+                    Ok(response) => {
+                        let resp = response.into_inner();
+                        let venue_order_id = VenueOrderId::new(&resp.order_id);
+                        info!(
+                            "Order submitted successfully: order_id={}, status={}",
+                            resp.order_id,
+                            resp.execution_report_status,
+                        );
+                        emitter.emit_order_accepted(&order, venue_order_id, ts_event);
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to submit order: {e} (instrument={figi}, client_oid={client_order_id})",
+                        );
+                        emitter.emit_order_rejected(&order, &format!("{e}"), ts_event, false);
+                        return Err(e.into());
+                    }
                 }
             }
             Ok(())

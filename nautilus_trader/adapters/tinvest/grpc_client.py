@@ -846,6 +846,8 @@ class TInvestGrpcClient:
         direction: int = 1,
         expiration_type: int = 1,
         stop_order_type: int = 1,
+        exchange_order_type: int = 0,
+        take_profit_type: int = 0,
     ) -> dict | None:
         """Submit a stop-order.
 
@@ -869,6 +871,10 @@ class TInvestGrpcClient:
             Stop order expiration (1=GoodTillCancel, 2=GoodTillDate).
         stop_order_type : int
             Stop order type (1=TakeProfit, 2=StopLoss, 3=StopLimit).
+        exchange_order_type : int, default 0
+            The child exchange order type (0=Unspecified, 1=Market, 2=Limit).
+        take_profit_type : int, default 0
+            TakeProfit subtype (0=Unspecified, 1=Regular, 2=Trailing).
 
         Returns
         -------
@@ -887,8 +893,82 @@ class TInvestGrpcClient:
                 direction=direction,
                 expiration_type=expiration_type,
                 stop_order_type=stop_order_type,
+                exchange_order_type=exchange_order_type,
+                take_profit_type=take_profit_type,
             )
         logger.warning("post_stop_order: native client not available")
+        return None
+
+    async def replace_stop_order(
+        self,
+        account_id: str,
+        stop_order_id: str,
+        figi: str,
+        quantity: int,
+        order_id: str,
+        price: float | None = None,
+        stop_price: float | None = None,
+        direction: int = 1,
+        expiration_type: int = 1,
+        stop_order_type: int = 1,
+        exchange_order_type: int = 0,
+        take_profit_type: int = 0,
+    ) -> dict | None:
+        """Replace a stop-order (F4).
+
+        The T-Invest StopOrdersService has no ``ReplaceStopOrder`` RPC, so a
+        replacement is implemented as *cancel the old stop-order* followed by
+        *submit a new stop-order* with the updated parameters.
+
+        Parameters
+        ----------
+        account_id : str
+            The account ID.
+        stop_order_id : str
+            The stop-order ID to replace.
+        figi : str
+            Instrument FIGI.
+        quantity : int
+            Order quantity in lots.
+        order_id : str
+            New client order ID for idempotency (UUID).
+        price : float, optional
+            Order price (for stop-limit orders).
+        stop_price : float, optional
+            Stop trigger price.
+        direction : int
+            Order direction (1=Buy, 2=Sell).
+        expiration_type : int
+            Stop order expiration (1=GoodTillCancel, 2=GoodTillDate).
+        stop_order_type : int
+            Stop order type (1=TakeProfit, 2=StopLoss, 3=StopLimit).
+        exchange_order_type : int, default 0
+            The child exchange order type (0=Unspecified, 1=Market, 2=Limit).
+        take_profit_type : int, default 0
+            TakeProfit subtype (0=Unspecified, 1=Regular, 2=Trailing).
+
+        Returns
+        -------
+        dict | None
+            Response dict with old_stop_order_id, stop_order_id, etc.
+
+        """
+        if self._native is not None:
+            return await self._native.replace_stop_order(
+                account_id=account_id,
+                stop_order_id=stop_order_id,
+                figi=figi,
+                quantity=quantity,
+                order_id=order_id,
+                price=price,
+                stop_price=stop_price,
+                direction=direction,
+                expiration_type=expiration_type,
+                stop_order_type=stop_order_type,
+                exchange_order_type=exchange_order_type,
+                take_profit_type=take_profit_type,
+            )
+        logger.warning("replace_stop_order: native client not available")
         return None
 
     async def cancel_stop_order(
