@@ -121,9 +121,8 @@ The following integrations are currently supported; see [docs/integrations/](htt
 | [Lighter](https://lighter.xyz)                            | `LIGHTER`             | Crypto Exchange (DEX)   | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/lighter.md)      |
 | [OKX](https://okx.com)                                    | `OKX`                 | Crypto Exchange (CEX)   | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/okx.md)          |
 | [Polymarket](https://polymarket.com)                      | `POLYMARKET`          | Prediction Market (DEX) | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/polymarket.md)   |
-| [T-Invest](https://www.tinkoff.ru/invest/)                | `TINVEST`             | Brokerage (MOEX)        | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/tinvest.md)      |
-| [Tardis](https://tardis.dev)                              | `TARDIS`              | Crypto Data Provider    | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/tardis.md)       |
 | [T-Invest](https://developer.tbank.ru/invest/intro/intro) | `TINVEST`             | Brokerage (MOEX)        | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/tinvest.md)      |
+| [Tardis](https://tardis.dev)                              | `TARDIS`              | Crypto Data Provider    | ![status](https://img.shields.io/badge/stable-green) | [Guide](docs/integrations/tardis.md)       |
 
 - **ID**: The default client ID for the integrations adapter clients.
 - **Type**: The type of integration (often the venue type).
