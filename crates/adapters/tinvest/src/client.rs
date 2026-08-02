@@ -244,100 +244,130 @@ impl TInvestGrpcClient {
 
     pub async fn instruments(&self) -> Result<InstrumentsServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.instruments.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(InstrumentsServiceClient::new(channel));
+            let client = InstrumentsServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     pub async fn market_data(&self) -> Result<MarketDataServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.market_data.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(MarketDataServiceClient::new(channel));
+            let client = MarketDataServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     pub async fn market_data_stream(
         &self,
     ) -> Result<MarketDataStreamServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.market_data_stream.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(MarketDataStreamServiceClient::new(channel));
+            let client = MarketDataStreamServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     pub async fn operations(&self) -> Result<OperationsServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.operations.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(OperationsServiceClient::new(channel));
+            let client = OperationsServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     pub async fn operations_stream(
         &self,
     ) -> Result<OperationsStreamServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.operations_stream.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(OperationsStreamServiceClient::new(channel));
+            let client = OperationsStreamServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     pub async fn orders(&self) -> Result<OrdersServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.orders.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(OrdersServiceClient::new(channel));
+            let client = OrdersServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     pub async fn orders_stream(
         &self,
     ) -> Result<OrdersStreamServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.orders_stream.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(OrdersStreamServiceClient::new(channel));
+            let client = OrdersStreamServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     pub async fn stop_orders(
         &self,
     ) -> Result<StopOrdersServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.stop_orders.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(StopOrdersServiceClient::new(channel));
+            let client = StopOrdersServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     pub async fn users(&self) -> Result<UsersServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.users.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(UsersServiceClient::new(channel));
+            let client = UsersServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     pub async fn sandbox(&self) -> Result<SandboxServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.sandbox.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(SandboxServiceClient::new(channel));
+            let client = SandboxServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 
     /// Get or create the signals service stub (F15).
@@ -347,10 +377,13 @@ impl TInvestGrpcClient {
     /// the gRPC contract surface only.
     pub async fn signals(&self) -> Result<SignalServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.signals.write().await;
-        if guard.is_none() {
+        if let Some(client) = guard.as_ref() {
+            Ok(client.clone())
+        } else {
             let channel = self.get_channel()?;
-            *guard = Some(SignalServiceClient::new(channel));
+            let client = SignalServiceClient::new(channel);
+            *guard = Some(client.clone());
+            Ok(client)
         }
-        Ok(guard.clone().unwrap())
     }
 }

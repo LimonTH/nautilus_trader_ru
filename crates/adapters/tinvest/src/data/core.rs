@@ -244,8 +244,8 @@ impl TInvestLiveMarketDataClient {
                 let request = crate::proto::GetTechAnalysisRequest {
                     indicator_type,
                     instrument_uid: instrument_uid_owned.clone(),
-                    from: from_ts.clone(),
-                    to: to_ts.clone(),
+                    from: from_ts,
+                    to: to_ts,
                     interval,
                     type_of_price,
                     length,

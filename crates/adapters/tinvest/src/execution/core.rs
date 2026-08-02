@@ -462,10 +462,10 @@ impl ExecutionClient for TInvestLiveExecutionClient {
                 // exchange_order_type: 1=Market, 2=Limit
                 let (stop_order_type, exchange_order_type, stop_price, limit_price) =
                     match order_type_str.as_str() {
-                        "STOP_MARKET" => (2, 1, trigger_price.clone(), None),
-                        "STOP_LIMIT" => (3, 2, trigger_price.clone(), price),
-                        "MARKET_IF_TOUCHED" => (1, 1, trigger_price.clone(), None),
-                        "LIMIT_IF_TOUCHED" => (1, 2, trigger_price.clone(), price),
+                        "STOP_MARKET" => (2, 1, trigger_price, None),
+                        "STOP_LIMIT" => (3, 2, trigger_price, price),
+                        "MARKET_IF_TOUCHED" => (1, 1, trigger_price, None),
+                        "LIMIT_IF_TOUCHED" => (1, 2, trigger_price, price),
                         _ => unreachable!("stop order already checked"),
                     };
 

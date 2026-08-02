@@ -1129,6 +1129,29 @@ class TInvestGrpcClient:
         logger.warning("get_accrued_interests: native client not available")
         return []
 
+    async def get_signals(self, strategy_id: str | None = None) -> list[dict]:
+        """Get available signal strategies (F15, NOT_APPLICABLE).
+
+        The SignalsService exposes analytical signals which have no Nautilus
+        event-model equivalent (ADR-5). This is a contract-completeness stub
+        only — no engine integration is performed.
+
+        Parameters
+        ----------
+        strategy_id : str, optional
+            Filter by strategy identifier.
+
+        Returns
+        -------
+        list[dict]
+            List of signal strategy dicts.
+
+        """
+        if self._native is not None:
+            return await self._native.get_signals(strategy_id=strategy_id)
+        logger.warning("get_signals: native client not available")
+        return []
+
     async def get_accounts(self) -> list[dict]:
         """Get user accounts.
 
