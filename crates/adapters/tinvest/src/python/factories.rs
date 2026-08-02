@@ -329,10 +329,10 @@ fn option_to_dict<'a>(py: Python<'a>, o: &'a proto::Option) -> PyResult<Bound<'a
 // Helper: Instrument proto → Python dict (used by GetInstrumentBy)
 // ---------------------------------------------------------------------------
 
-fn instrument_to_dict<'a>(
-    py: Python<'a>,
-    inst: &'a proto::Instrument,
-) -> PyResult<Bound<'a, PyDict>> {
+fn instrument_to_dict<'py>(
+    py: Python<'py>,
+    inst: &proto::Instrument,
+) -> PyResult<Bound<'py, PyDict>> {
     let d = PyDict::new(py);
     d.set_item("figi", &inst.figi)?;
     d.set_item("ticker", &inst.ticker)?;
@@ -1237,7 +1237,7 @@ impl PyTInvestGrpcClient {
     /// Returns immediately with an idempotency ``order_request_id`` and the
     /// initial ``execution_report_status``; the final order state is delivered
     /// via the order state stream or polled with ``get_order_state``.
-    #[pyo3(signature = (account_id, figi, quantity, price=None, direction=1, order_type=2, order_id=""))]
+    #[pyo3(signature = (account_id, figi, quantity, price=None, direction=1, order_type=2, order_id="".to_string()))]
     pub fn post_order_async<'py>(
         &mut self,
         py: Python<'py>,
@@ -2810,7 +2810,7 @@ impl PyTInvestGrpcClient {
     }
 
     /// Submit an order asynchronously in the sandbox (F14).
-    #[pyo3(signature = (account_id, figi, quantity, price=None, direction=1, order_type=2, order_id=""))]
+    #[pyo3(signature = (account_id, figi, quantity, price=None, direction=1, order_type=2, order_id="".to_string()))]
     pub fn post_sandbox_order_async<'py>(
         &mut self,
         py: Python<'py>,
