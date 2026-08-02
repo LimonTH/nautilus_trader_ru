@@ -201,6 +201,64 @@ impl TInvestLiveMarketDataClient {
         Ok(resp)
     }
 
+    /// Get technical analysis indicators for the given instrument (F5).
+    ///
+    /// Calls `MarketDataService::GetTechAnalysis`. This is a heavy gRPC call, so
+    /// it is executed through [`TInvestGrpcClient::with_retry`] with exponential
+    /// backoff. Requires an ``instrument_uid`` (FIGI/ticker are not sufficient).
+    pub async fn get_tech_analysis(
+        &self,
+        indicator_type: i32,
+        instrument_uid: &str,
+        from: &Option<chrono::DateTime<chrono::Utc>>,
+        to: &Option<chrono::DateTime<chrono::Utc>>,
+        interval: i32,
+        type_of_price: i32,
+        length: i32,
+    ) -> Result<crate::proto::GetTechAnalysisResponse, TInvestClientError> {
+        if !self.grpc_client.is_connected() {
+            return Err(TInvestClientError::NotConnected);
+        }
+
+        info!(
+            "get_tech_analysis: indicator_type={}, instrument_uid={}, interval={}, length={}",
+            indicator_type, instrument_uid, interval, length,
+        );
+
+        let grpc_client = self.grpc_client.clone();
+        let instrument_uid_owned = instrument_uid.to_string();
+        let from_ts = from.map(|dt| prost_types::Timestamp {
+            seconds: dt.timestamp(),
+            nanos: dt.timestamp_subsec_nanos() as i32,
+        });
+        let to_ts = to.map(|dt| prost_types::Timestamp {
+            seconds: dt.timestamp(),
+            nanos: dt.timestamp_subsec_nanos() as i32,
+        });
+
+        self.grpc_client
+            .with_retry("get_tech_analysis", || async {
+                let mut stub = grpc_client.market_data().await?;
+                // `from`/`to` are REQUIRED by the API; missing values are
+                // surfaced by the server as an InvalidArgument error.
+                let request = crate::proto::GetTechAnalysisRequest {
+                    indicator_type,
+                    instrument_uid: instrument_uid_owned.clone(),
+                    from: from_ts.clone(),
+                    to: to_ts.clone(),
+                    interval,
+                    type_of_price,
+                    length,
+                    deviation: None,
+                    smoothing: None,
+                };
+                let request = grpc_client.with_auth(tonic::Request::new(request));
+                let response = stub.get_tech_analysis(request).await?;
+                Ok(response.into_inner())
+            })
+            .await
+    }
+
     /// Start the bidirectional market data stream and wire callbacks to the [`DataEvent`] sender.
     ///
     /// Dispatches:

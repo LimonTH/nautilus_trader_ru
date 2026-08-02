@@ -266,6 +266,59 @@ class TInvestGrpcClient:
         logger.warning("request_trades: native client not available")
         return []
 
+    async def get_tech_analysis(
+        self,
+        indicator_type: int,
+        instrument_uid: str,
+        from_ts: int,
+        to_ts: int,
+        interval: int,
+        type_of_price: int = 1,
+        length: int = 0,
+    ) -> list[dict]:
+        """Get technical analysis indicators for an instrument (F5).
+
+        This is a heavy gRPC call — the Rust client executes it with retry
+        and exponential backoff. Requires an ``instrument_uid`` (FIGI/ticker
+        are not sufficient for this endpoint).
+
+        Parameters
+        ----------
+        indicator_type : int
+            Indicator type (1=BB, 2=EMA, 3=RSI, 4=MACD, 5=SMA).
+        instrument_uid : str
+            The instrument UID.
+        from_ts : int
+            Start time as unix nanos.
+        to_ts : int
+            End time as unix nanos.
+        interval : int
+            Indicator interval (1=1min, 2=5min, ..., 13=month).
+        type_of_price : int, default 1
+            Price type used for the calculation (1=Close, 2=Open, ...).
+        length : int, default 0
+            Trading period for the indicator.
+
+        Returns
+        -------
+        list[dict]
+            List of technical indicator items with timestamp and
+            middle_band/upper_band/lower_band/signal/macd keys.
+
+        """
+        if self._native is not None:
+            return await self._native.get_tech_analysis(
+                indicator_type=indicator_type,
+                instrument_uid=instrument_uid,
+                from_ts=from_ts,
+                to_ts=to_ts,
+                interval=interval,
+                type_of_price=type_of_price,
+                length=length,
+            )
+        logger.warning("get_tech_analysis: native client not available")
+        return []
+
     # -- Streaming Subscriptions (polling-based) ---------------------------------------------
 
     def _start_polling(

@@ -964,6 +964,97 @@ impl PyTInvestGrpcClient {
         })
     }
 
+    /// Get technical analysis indicators for an instrument (F5).
+    #[pyo3(signature = (indicator_type, instrument_uid, from_ts, to_ts, interval, type_of_price=1, length=0))]
+    pub fn get_tech_analysis<'py>(
+        &mut self,
+        py: Python<'py>,
+        indicator_type: i32,
+        instrument_uid: String,
+        from_ts: i64,
+        to_ts: i64,
+        interval: i32,
+        type_of_price: i32,
+        length: i32,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut md = inner.market_data().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("market_data service: {e}"))
+            })?;
+            let request = proto::GetTechAnalysisRequest {
+                indicator_type,
+                instrument_uid: instrument_uid.clone(),
+                from: Some(prost_types::Timestamp {
+                    seconds: from_ts / 1_000_000_000,
+                    nanos: (from_ts % 1_000_000_000) as i32,
+                }),
+                to: Some(prost_types::Timestamp {
+                    seconds: to_ts / 1_000_000_000,
+                    nanos: (to_ts % 1_000_000_000) as i32,
+                }),
+                interval,
+                type_of_price,
+                length,
+                deviation: None,
+                smoothing: None,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = md.get_tech_analysis(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("get_tech_analysis: {e}"))
+            })?;
+            let indicators = response.into_inner().technical_indicators;
+
+            Python::attach(|py| {
+                let py_list = PyList::new(py, &[] as &[Py<PyAny>])?;
+                for item in &indicators {
+                    let d = PyDict::new(py);
+                    d.set_item(
+                        "timestamp",
+                        item.timestamp.as_ref().map(|t| t.seconds).unwrap_or(0),
+                    )?;
+                    d.set_item(
+                        "middle_band",
+                        item.middle_band
+                            .as_ref()
+                            .map(|q| quotation_to_dict(py, q))
+                            .transpose()?,
+                    )?;
+                    d.set_item(
+                        "upper_band",
+                        item.upper_band
+                            .as_ref()
+                            .map(|q| quotation_to_dict(py, q))
+                            .transpose()?,
+                    )?;
+                    d.set_item(
+                        "lower_band",
+                        item.lower_band
+                            .as_ref()
+                            .map(|q| quotation_to_dict(py, q))
+                            .transpose()?,
+                    )?;
+                    d.set_item(
+                        "signal",
+                        item.signal
+                            .as_ref()
+                            .map(|q| quotation_to_dict(py, q))
+                            .transpose()?,
+                    )?;
+                    d.set_item(
+                        "macd",
+                        item.macd
+                            .as_ref()
+                            .map(|q| quotation_to_dict(py, q))
+                            .transpose()?,
+                    )?;
+                    py_list.append(d)?;
+                }
+                Ok(py_list.into_any().unbind())
+            })
+        })
+    }
+
     /// Get all accounts for the current token.
     pub fn get_accounts<'py>(
         &mut self,
