@@ -234,6 +234,11 @@ pub trait ExecutionAlgorithm: DataActor {
         }
         publish_order_event(&event);
 
+        // A denied order never executes, so its stored submit params are dropped here
+        // rather than waiting for an execution completion that will never arrive.
+        ExecutionAlgorithmNative::exec_algorithm_core_mut(self)
+            .remove_submit_params(&order.client_order_id());
+
         Ok(())
     }
 
@@ -812,7 +817,7 @@ pub trait ExecutionAlgorithm: DataActor {
         if !qty_changing && !price_changing && !trigger_changing {
             log::error!(
                 "Cannot create command ModifyOrder: \
-                quantity, price and trigger were either None \
+                quantity, price, and trigger were either None \
                 or the same as existing values"
             );
             return Ok(());
@@ -1477,8 +1482,7 @@ mod tests {
     #[derive(Debug)]
     struct TestAlgorithm {
         core: ExecutionAlgorithmCore,
-        on_order_called: bool,
-        last_order_client_id: Option<ClientOrderId>,
+        order_client_ids: Vec<ClientOrderId>,
     }
 
     #[derive(Debug)]
@@ -1537,8 +1541,7 @@ mod tests {
         fn new(config: ExecutionAlgorithmConfig) -> Self {
             Self {
                 core: ExecutionAlgorithmCore::new(config),
-                on_order_called: false,
-                last_order_client_id: None,
+                order_client_ids: Vec::new(),
             }
         }
     }
@@ -1547,8 +1550,7 @@ mod tests {
 
     nautilus_execution_algorithm!(TestAlgorithm, {
         fn on_order(&mut self, order: OrderAny) -> anyhow::Result<()> {
-            self.on_order_called = true;
-            self.last_order_client_id = Some(order.client_order_id());
+            self.order_client_ids.push(order.client_order_id());
             Ok(())
         }
     });
@@ -1599,8 +1601,7 @@ mod tests {
     fn test_algorithm_creation() {
         let algo = create_test_algorithm();
         assert!(algo.id().inner().starts_with("TEST-"));
-        assert!(!algo.on_order_called);
-        assert!(algo.last_order_client_id.is_none());
+        assert!(algo.order_client_ids.is_empty());
     }
 
     #[rstest]
@@ -1732,6 +1733,14 @@ mod tests {
         }
         let (handler, events) = subscribe_order_topic(strategy_id);
 
+        let mut params = nautilus_core::Params::new();
+        params.insert(
+            "route".to_string(),
+            serde_json::Value::String("A".to_string()),
+        );
+        algo.core
+            .remember_submit_params(order.client_order_id(), Some(params));
+
         let error = algo
             .deny_order(
                 &order,
@@ -1748,6 +1757,43 @@ mod tests {
         ));
         assert_eq!(cached_order.status(), OrderStatus::Accepted);
         assert!(events.borrow().is_empty());
+        // A failed denial is not terminal, so the submit params must be retained
+        assert!(algo.core.submit_params(&order.client_order_id()).is_some());
+    }
+
+    #[rstest]
+    fn test_algorithm_deny_order_removes_submit_params() {
+        let mut algo = create_test_algorithm();
+        register_algorithm(&mut algo);
+
+        let strategy_id = StrategyId::from("STRAT-ALGO-DENY-PARAMS");
+        let order = OrderTestBuilder::new(OrderType::Market)
+            .strategy_id(strategy_id)
+            .instrument_id(InstrumentId::from("BTC/USDT.BINANCE"))
+            .client_order_id(ClientOrderId::from("O-ALGO-DENY-PARAMS"))
+            .quantity(Quantity::from("1.0"))
+            .build();
+        {
+            let cache_rc = algo.core.cache_rc();
+            cache_rc
+                .borrow_mut()
+                .add_order(order.clone(), None, None, false)
+                .unwrap();
+        }
+
+        let mut params = nautilus_core::Params::new();
+        params.insert(
+            "route".to_string(),
+            serde_json::Value::String("A".to_string()),
+        );
+        algo.core
+            .remember_submit_params(order.client_order_id(), Some(params));
+        assert!(algo.core.submit_params(&order.client_order_id()).is_some());
+
+        algo.deny_order(&order, Ustr::from("VALIDATION_FAILED: test"))
+            .unwrap();
+
+        assert!(algo.core.submit_params(&order.client_order_id()).is_none());
     }
 
     #[rstest]
@@ -2637,6 +2683,14 @@ mod tests {
         );
         algo.execute(TradingCommand::SubmitOrderList(command))
             .unwrap();
+
+        assert_eq!(
+            algo.order_client_ids,
+            [
+                ClientOrderId::from("O-LIST-001"),
+                ClientOrderId::from("O-LIST-002"),
+            ],
+        );
 
         for id in ["O-LIST-001", "O-LIST-002"] {
             assert_eq!(

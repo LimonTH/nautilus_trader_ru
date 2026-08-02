@@ -13,7 +13,10 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-use std::collections::BTreeMap;
+use std::{
+    collections::{BTreeMap, hash_map::DefaultHasher},
+    hash::{Hash, Hasher},
+};
 
 use ahash::AHashSet;
 use indexmap::IndexMap;
@@ -3891,6 +3894,50 @@ fn own_order() -> OwnBookOrder {
 }
 
 #[rstest]
+fn test_own_order_ordering_laws(own_order: OwnBookOrder) {
+    let mut updated = own_order;
+    updated.price = Price::from("101.00");
+    updated.size = Quantity::from("5");
+    updated.status = OrderStatus::Accepted;
+    updated.ts_last = 20.into();
+    updated.ts_accepted = 15.into();
+    updated.ts_init = 10.into();
+
+    assert_eq!(own_order, updated);
+    assert_eq!(own_order.cmp(&updated), std::cmp::Ordering::Equal);
+
+    let mut original_hasher = DefaultHasher::new();
+    own_order.hash(&mut original_hasher);
+    let mut updated_hasher = DefaultHasher::new();
+    updated.hash(&mut updated_hasher);
+    assert_eq!(original_hasher.finish(), updated_hasher.finish());
+
+    let mut lower_id_later_timestamp = own_order;
+    lower_id_later_timestamp.client_order_id = ClientOrderId::from("O-100");
+    lower_id_later_timestamp.ts_init = 200.into();
+    let mut higher_id_earlier_timestamp = own_order;
+    higher_id_earlier_timestamp.client_order_id = ClientOrderId::from("O-200");
+    higher_id_earlier_timestamp.ts_init = 100.into();
+
+    assert!(lower_id_later_timestamp < higher_id_earlier_timestamp);
+
+    let variants = [
+        own_order,
+        updated,
+        lower_id_later_timestamp,
+        higher_id_earlier_timestamp,
+    ];
+
+    for a in &variants {
+        for b in &variants {
+            assert_eq!(a == b, a.cmp(b).is_eq());
+            assert_eq!(a.partial_cmp(b), Some(a.cmp(b)));
+            assert_eq!(a.cmp(b), b.cmp(a).reverse());
+        }
+    }
+}
+
+#[rstest]
 fn test_own_order_to_book_price(own_order: OwnBookOrder) {
     let book_price = own_order.to_book_price();
     assert_eq!(book_price.value, Price::from("100.00"));
@@ -4703,6 +4750,100 @@ fn test_own_order_book_bids_and_asks_as_map() {
     let ask_orders = asks_map.get(&ask_price).unwrap();
     assert_eq!(ask_orders.len(), 1);
     assert_eq!(ask_orders[0], order2);
+}
+
+#[rstest]
+fn test_own_order_book_missing_ts_now_skips_acceptance_filter() {
+    let instrument_id = InstrumentId::from("AAPL.XNAS");
+    let mut book = OwnOrderBook::new(instrument_id);
+    let order = OwnBookOrder::new(
+        TraderId::test_default(),
+        ClientOrderId::from("O-1"),
+        Some(VenueOrderId::from("1")),
+        OrderSideSpecified::Buy,
+        Price::from("100.00"),
+        Quantity::from("10"),
+        OrderType::Limit,
+        TimeInForce::Gtc,
+        OrderStatus::Accepted,
+        UnixNanos::default(),
+        UnixNanos::max(),
+        UnixNanos::default(),
+        UnixNanos::default(),
+    );
+    book.add(order);
+
+    // `ts_accepted` is deliberately `UnixNanos::max()` rather than a value derived from
+    // the current wall clock, so the assertion cannot pass by accident of when it runs.
+    let unfiltered = book.bids_as_map(None, None, None);
+    let filtered = book.bids_as_map(None, None, Some(0));
+
+    assert_eq!(unfiltered.get(&dec!(100.00)), Some(&vec![order]));
+    assert!(filtered.is_empty());
+}
+
+#[rstest]
+fn test_own_order_book_acceptance_buffer_overflow_excludes_order() {
+    let instrument_id = InstrumentId::from("AAPL.XNAS");
+    let mut book = OwnOrderBook::new(instrument_id);
+    let order = OwnBookOrder::new(
+        TraderId::test_default(),
+        ClientOrderId::from("O-1"),
+        Some(VenueOrderId::from("1")),
+        OrderSideSpecified::Buy,
+        Price::from("100.00"),
+        Quantity::from("10"),
+        OrderType::Limit,
+        TimeInForce::Gtc,
+        OrderStatus::Accepted,
+        UnixNanos::default(),
+        UnixNanos::max(),
+        UnixNanos::default(),
+        UnixNanos::default(),
+    );
+    book.add(order);
+
+    // `ts_accepted + accepted_buffer_ns` overflows, so the order can never become
+    // eligible and is excluded rather than panicking on the addition.
+    let overflowed = book.bids_as_map(None, Some(1), Some(u64::MAX));
+
+    assert!(overflowed.is_empty());
+}
+
+#[rstest]
+#[should_panic(expected = "ts_now must be provided when accepted_buffer_ns > 0")]
+fn test_own_order_book_positive_accepted_buffer_without_ts_now_panics() {
+    let instrument_id = InstrumentId::from("AAPL.XNAS");
+    let book = OwnOrderBook::new(instrument_id);
+
+    let _ = book.bids_as_map(None, Some(1), None);
+}
+
+#[rstest]
+fn test_own_book_grouped_pprint_includes_future_accepted_order() {
+    let instrument_id = InstrumentId::from("AAPL.XNAS");
+    let mut book = OwnOrderBook::new(instrument_id);
+    let order = OwnBookOrder::new(
+        TraderId::test_default(),
+        ClientOrderId::from("O-1"),
+        Some(VenueOrderId::from("1")),
+        OrderSideSpecified::Buy,
+        Price::from("123.45"),
+        Quantity::from("17"),
+        OrderType::Limit,
+        TimeInForce::Gtc,
+        OrderStatus::Accepted,
+        UnixNanos::default(),
+        UnixNanos::max(),
+        UnixNanos::default(),
+        UnixNanos::default(),
+    );
+    book.add(order);
+
+    let output = book.pprint(3, Some(dec!(0.01)));
+
+    assert!(output.contains("123.45"));
+    assert!(output.contains("17"));
 }
 
 #[rstest]
@@ -6657,10 +6798,14 @@ fn own_order_passes_filter(
     ts_now: Option<u64>,
 ) -> bool {
     let accepted_buffer_ns = accepted_buffer_ns.unwrap_or(0);
-    let ts_now = ts_now.unwrap_or(u64::MAX);
 
     status.is_none_or(|filter| filter.contains(&order.status))
-        && order.ts_accepted + accepted_buffer_ns <= ts_now
+        && ts_now.is_none_or(|ts_now| {
+            order
+                .ts_accepted
+                .checked_add(accepted_buffer_ns)
+                .is_some_and(|eligible_at| eligible_at.as_u64() <= ts_now)
+        })
 }
 
 fn test_own_book_with_operations(operations: Vec<OwnBookOperation>) {

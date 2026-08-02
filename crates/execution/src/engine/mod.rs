@@ -55,7 +55,10 @@ use nautilus_common::{
         self, MessagingSwitchboard, TypedHandler, TypedIntoHandler, get_message_bus,
         switchboard::{self},
     },
-    runner::try_get_trading_cmd_sender,
+    runner::{
+        TradingCommandMessage, capture_trading_cmd, trading_cmd_is_dispatching,
+        try_get_trading_cmd_sender,
+    },
     timer::{TimeEvent, TimeEventCallback},
 };
 use nautilus_core::{
@@ -181,14 +184,16 @@ impl ExecutionEngine {
         );
 
         // Queued endpoint for deferred command execution (re-entrancy safe),
-        // falls back to direct endpoint if no sender is initialized (e.g., backtest/test).
+        // with direct dispatch when no sender is installed.
         msgbus::register_trading_command_endpoint(
             MessagingSwitchboard::exec_engine_queue_execute(),
             TypedIntoHandler::from(move |cmd: TradingCommand| {
-                if let Some(sender) = try_get_trading_cmd_sender() {
-                    sender.execute(cmd);
+                let endpoint = MessagingSwitchboard::exec_engine_execute();
+                if trading_cmd_is_dispatching() {
+                    capture_trading_cmd(TradingCommandMessage::new(endpoint, cmd));
+                } else if let Some(sender) = try_get_trading_cmd_sender() {
+                    sender.execute(TradingCommandMessage::new(endpoint, cmd));
                 } else {
-                    let endpoint = MessagingSwitchboard::exec_engine_execute();
                     msgbus::send_trading_command(endpoint, cmd);
                 }
             }),
@@ -604,6 +609,10 @@ impl ExecutionEngine {
     /// Returns an error if no client is registered with the given ID.
     pub fn deregister_client(&mut self, client_id: ClientId) -> anyhow::Result<()> {
         if self.clients.shift_remove(&client_id).is_some() {
+            if self.default_client_id == Some(client_id) {
+                self.default_client_id = None;
+            }
+
             // Remove from routing map if present
             self.routing_map
                 .retain(|_, mapped_id| mapped_id != &client_id);
@@ -1295,13 +1304,14 @@ impl ExecutionEngine {
 
         {
             let mut cache = self.cache.borrow_mut();
-            if let Err(e) = cache.add_order(order.clone(), None, None, false) {
-                log::error!("Failed to add external order to cache: {e}");
+            if let Err(e) = cache.add_venue_order_id(&client_order_id, &venue_order_id, false) {
+                log::warn!("Failed to claim venue order ID for external order: {e}");
                 return None;
             }
 
-            if let Err(e) = cache.add_venue_order_id(&client_order_id, &venue_order_id, false) {
-                log::warn!("Failed to add venue order ID index: {e}");
+            if let Err(e) = cache.add_order(order.clone(), None, None, false) {
+                log::error!("Failed to add external order to cache: {e}");
+                return None;
             }
         }
 
@@ -2526,7 +2536,9 @@ impl ExecutionEngine {
 
                 if validation.is_ok() {
                     let event = OrderEventAny::Filled(fill.clone());
-                    let Some(order) = self.update_cached_order(client_order_id, &event) else {
+                    let Some(order) =
+                        self.update_cached_order(client_order_id, &event, apply_position)
+                    else {
                         return;
                     };
 
@@ -2633,7 +2645,10 @@ impl ExecutionEngine {
                     ));
                 }
 
-                if self.update_cached_order(client_order_id, &event).is_none() {
+                if self
+                    .update_cached_order(client_order_id, &event, true)
+                    .is_none()
+                {
                     return;
                 }
 
@@ -2645,7 +2660,10 @@ impl ExecutionEngine {
                 self.publish_position_events(position_events);
             }
             _ => {
-                if self.update_cached_order(client_order_id, &event).is_some() {
+                if self
+                    .update_cached_order(client_order_id, &event, true)
+                    .is_some()
+                {
                     self.publish_order_event(&event);
                 }
             }
@@ -2675,20 +2693,20 @@ impl ExecutionEngine {
         let duplicate_position_fill = self.position_contains_trade_id(position_id, fill.trade_id);
 
         let event = OrderEventAny::Filled(fill.clone());
-        let portfolio_endpoint = MessagingSwitchboard::portfolio_update_order();
-        msgbus::send_order_event(portfolio_endpoint, event.clone());
 
-        let position_events = if duplicate_position_fill {
+        if duplicate_position_fill {
             log::warn!(
-                "Duplicate leg fill: {} trade_id={} already applied to position {}, skipping position update",
+                "Duplicate leg fill: {} trade_id={} already applied to position {}, skipping",
                 fill.client_order_id,
                 fill.trade_id,
                 position_id
             );
-            Vec::new()
-        } else {
-            self.handle_position_update(&instrument, fill, oms_type)
-        };
+            return;
+        }
+
+        let portfolio_endpoint = MessagingSwitchboard::portfolio_update_order();
+        msgbus::send_order_event(portfolio_endpoint, event.clone());
+        let position_events = self.handle_position_update(&instrument, fill, oms_type);
         self.publish_order_event(&event);
         self.publish_position_events(position_events);
     }
@@ -3018,6 +3036,7 @@ impl ExecutionEngine {
         &self,
         client_order_id: ClientOrderId,
         event: &OrderEventAny,
+        send_portfolio_update: bool,
     ) -> Option<OrderAny> {
         let result = { self.cache.borrow_mut().update_order(event) };
 
@@ -3122,7 +3141,9 @@ impl ExecutionEngine {
             self.create_order_state_snapshot(&order);
         }
 
-        self.send_order_update_to_portfolio(event);
+        if send_portfolio_update {
+            self.send_order_update_to_portfolio(event);
+        }
 
         Some(order)
     }
@@ -4025,11 +4046,13 @@ impl ExecutionEngine {
 
 #[cfg(test)]
 mod tests {
+    use nautilus_common::clock::TestClock;
     use nautilus_model::{
-        enums::{LiquiditySide, OrderSide, PositionSideSpecified},
+        enums::{LiquiditySide, OrderSide, OrderType, PositionSideSpecified},
         events::order::spec::OrderFilledSpec,
         identifiers::{AccountId, ClientOrderId, TradeId, VenueOrderId},
         instruments::{InstrumentAny, stubs::audusd_sim},
+        orders::builder::OrderTestBuilder,
         types::Price,
     };
     use rstest::*;
@@ -4145,6 +4168,52 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[rstest]
+    fn materialize_external_order_rejects_venue_id_owned_by_another_order() {
+        let cache = Rc::new(RefCell::new(Cache::default()));
+        let venue_order_id = VenueOrderId::from("V-SHARED");
+        let owner_id = ClientOrderId::from("O-OWNER");
+        cache
+            .borrow_mut()
+            .add_venue_order_id(&owner_id, &venue_order_id, false)
+            .unwrap();
+        let engine = ExecutionEngine::new(
+            Rc::new(RefCell::new(TestClock::new())),
+            Rc::clone(&cache),
+            None,
+        );
+        let instrument = InstrumentAny::CurrencyPair(audusd_sim());
+        let claimant_id = ClientOrderId::from("O-CLAIMANT");
+        let order = OrderTestBuilder::new(OrderType::Limit)
+            .instrument_id(instrument.id())
+            .client_order_id(claimant_id)
+            .side(OrderSide::Buy)
+            .quantity(Quantity::from(100_000))
+            .price(Price::from("1.00000"))
+            .build();
+        let OrderEventAny::Initialized(initialized) = order.last_event().clone() else {
+            panic!("Expected initialized order");
+        };
+
+        let result = engine.materialize_external_order(
+            initialized,
+            claimant_id,
+            venue_order_id,
+            instrument.id(),
+            order.strategy_id(),
+            UnixNanos::default(),
+            None,
+        );
+
+        assert!(result.is_none());
+        assert!(!cache.borrow().order_exists(&claimant_id));
+        assert_eq!(
+            cache.borrow().client_order_id(&venue_order_id),
+            Some(&owner_id)
+        );
+        assert_eq!(cache.borrow().venue_order_id(&claimant_id), None);
     }
 
     fn position_for_account(

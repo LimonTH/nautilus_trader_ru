@@ -82,7 +82,7 @@ V2 shortens common strategy and cache names. The `QuoteTick`, `TradeTick`, and
 | `cache.quote_tick_count`             | `cache.quote_count`            |
 | `cache.trade_tick_count`             | `cache.trade_count`            |
 
-### Public API migration matrix
+### API changes
 
 V2 uses specific names for component and model identities:
 
@@ -241,21 +241,34 @@ Databento configuration also changes shape:
   `reconnect_timeout_mins` are not accepted by the v2 live-node config. Reconnection remains an
   internal client concern; do not copy those v1 fields into v2 config construction.
 
+Interactive Brokers legacy mutation fields have constructor or builder replacements:
+
+| V1 field or alias         | V2 replacement                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| `legacy_market_data_type` | Pass `market_data_type` to `InteractiveBrokersDataClientConfig`.                |
+| `legacy_load_ids`         | Pass `load_ids` to `InteractiveBrokersInstrumentProviderConfig`.                |
+| `legacy_load_contracts`   | Pass `load_contracts` to the instrument provider config.                        |
+| `legacy_symbology_method` | Pass `symbology_method` to the instrument provider config.                      |
+| `pickle_path`             | Pass or set `cache_path` on the instrument provider config.                     |
+| `routing`                 | Pass `RoutingConfig` to `LiveNodeBuilder.add_data_client` or `add_exec_client`. |
+| `dockerized_gateway`      | Start the gateway outside v2, then pass its `host` and `port`.                  |
+
+V2 retains writable `instrument_provider` fields on the data and execution client configs and
+`cache_path` on the provider config. A non‑`None` `dockerized_gateway` is rejected because Python
+v2 does not own the container lifecycle.
+
 V1 types from `nautilus_trader.config` move beside their owning runtime. For example,
 `BacktestRunConfig` comes from `nautilus_trader.backtest` and `PortfolioConfig` from
 `nautilus_trader.portfolio`.
 
-Use the generated type stubs in `python/nautilus_trader/` as the supported Python contract for the
-names they declare, not as an exhaustive inventory of runtime-visible names. Two reviewed
-class-member exceptions apply:
+Use the generated type stubs in `python/nautilus_trader/` as the supported Python contract. Some
+adapter wire DTOs expose extra runtime attributes that are not part of that contract. The following
+methods are callable at runtime but absent from the stubs, so static type checkers cannot resolve
+them:
 
-- Some adapter wire DTOs appear in public signatures or as runtime results. Their readback
-  properties are outside the supported member contract and omitted from the stubs.
-  `NON_CONTRACT_DTO_CLASSES` in the stub guard records the set.
-- `KrakenFuturesHttpClient.edit_orders_batch`, `KrakenFuturesHttpClient.submit_orders_batch`, and
-  `KrakenSpotHttpClient.submit_orders_batch` remain callable at runtime but absent from the stubs
-  because `pyo3_stub_gen` cannot represent their complex tuple parameter types. Static type
-  checkers cannot resolve these methods until the generator supports those parameter types.
+- `KrakenFuturesHttpClient.edit_orders_batch`
+- `KrakenFuturesHttpClient.submit_orders_batch`
+- `KrakenSpotHttpClient.submit_orders_batch`
 
 The [Python v2 examples][python-v2-examples] show current live-node builders, adapter factories,
 strategies, actors, and data/execution testers.
@@ -354,12 +367,20 @@ Python v2 `ExecutionAlgorithm` remains a routed-order component rather than inhe
 `Actor` authoring surface. Supported override points include:
 
 - `on_order`
+- `on_order_list`
 - Order and position callbacks
 - Lifecycle callbacks
 - `on_signal`
 
 The runtime owns command routing and calls `execute`; do not call or override `execute` as the
 algorithm entrypoint.
+
+V2 `OrderList` stores client order IDs instead of order objects. The runtime resolves those IDs
+through the cache and calls `on_order_list(order_list, orders)`, where `orders` follows the client
+order ID order. If the subclass overrides `on_order_list`, it receives one list callback and the
+runtime does not also call `on_order`. Without an override, the default implementation calls
+`on_order` once for each resolved order. Change v1 one‑argument overrides to accept `orders`; the
+v1 default did not fan out order lists.
 
 The supported authoring surface has these v1 dispositions:
 
@@ -403,10 +424,55 @@ class RoutedAlgorithm(ExecutionAlgorithm):
         self.log.info(f"Routing {instrument.id}; portfolio ready={portfolio_ready}")
 ```
 
+Order `exec_algorithm_params` keys and values remain string‑only across the v2 model and Python
+bindings. Encode each value as a string when constructing the order, then parse it in the algorithm.
+For example, pass `exec_algorithm_params={"horizon_secs": "300", "interval_secs": "10"}`, not
+numeric values. This keeps Python authoring aligned with the Rust `IndexMap<Ustr, Ustr>` contract.
+
+`ExecutionAlgorithmConfig` supports Python subclasses with custom fields. The inherited
+`__new__` applies the base fields before the Python `__init__` runs, so the subclass initializes
+only its custom attributes. Keep `**_kwargs` so the subclass accepts the base keywords. The base
+constructor ignores other unmatched keywords, so validate optional custom inputs in `__init__`.
+
+```python
+from nautilus_trader.model import ExecAlgorithmId
+from nautilus_trader.trading import ExecutionAlgorithmConfig
+
+
+class RoutedAlgorithmConfig(ExecutionAlgorithmConfig):
+    def __init__(
+        self,
+        horizon_secs: str,
+        interval_secs: str,
+        **_kwargs,
+    ) -> None:
+        self.horizon_secs = horizon_secs
+        self.interval_secs = interval_secs
+
+
+config = RoutedAlgorithmConfig(
+    exec_algorithm_id=ExecAlgorithmId("ROUTED"),
+    horizon_secs="300",
+    interval_secs="10",
+    log_events=False,
+)
+algorithm = RoutedAlgorithm(config)
+```
+
+If an algorithm subclass defines `__init__`, call `super().__init__(config)` to retain its Python
+instance and config for export.
+
+Define the algorithm and config classes at module scope so the exported import paths resolve.
+
 Constructed instances and importable configs work in backtest and live workflows:
 
-- Register v2 `ExecutionAlgorithm` instances with `LiveNode.add_exec_algorithm`.
-- Register DataActor-based compatibility algorithms with `add_exec_algorithm_from_config`.
+- Register v2 `ExecutionAlgorithm` instances with `BacktestEngine.add_exec_algorithm` or
+  `LiveNode.add_exec_algorithm`.
+- Call `algorithm.to_importable_config()` to export the algorithm path, config path, and config
+  values.
+- Register the result with `BacktestEngine.add_exec_algorithm_from_config` or
+  `LiveNode.add_exec_algorithm_from_config`.
+- Register DataActor‑based compatibility algorithms with `add_exec_algorithm_from_config`.
 
 Nodes normally drive lifecycle transitions. Direct lifecycle methods remain available for
 control-plane integrations and dispatch the same Python callbacks.
@@ -414,9 +480,9 @@ control-plane integrations and dispatch the same Python callbacks.
 Port one workflow at a time and verify the generated stub before replacing a v1 convenience method.
 Do not assume that a v1 adapter config field also exists on its v2 Rust config.
 
-## Accepted contract differences
+## Behavior changes
 
-The cutover accepts these differences from v1:
+Account for these differences from v1:
 
 - Custom data flows as native `CustomData` without the v1 wrapper semantics.
 - v2 caches `OptionGreeks` for option fee calculation; this extends v1.
@@ -426,8 +492,9 @@ The cutover accepts these differences from v1:
 - `PortfolioConfig.use_mark_prices` defaults to `true`; v1 defaulted to `false`. Set it to `false` to
   skip mark prices.
 - v2 `OrderList` stores client order IDs instead of order objects:
-  - Replace `order_list.orders` with `order_list.client_order_ids()`, then resolve each ID through
-    `cache.order(client_order_id)`.
+  - Use the resolved `orders` argument in `ExecutionAlgorithm.on_order_list(order_list, orders)`.
+  - Elsewhere, replace `order_list.orders` with `order_list.client_order_ids()`, then resolve each
+    ID through `cache.order(client_order_id)`.
   - Replace `order_list.first` with `cache.order(order_list.first_client_order_id)` after checking
     the ID is not `None`.
 - Catalog order-event data written before `activation_price` and `OrderFilled.info` were added cannot
@@ -442,16 +509,17 @@ The cutover accepts these differences from v1:
   `order.avg_px` and `order.slippage` columns move from `double precision` to `NUMERIC`, and the node
   now fails at connect time while the old column types remain.
 
-## Deferred limits
+## Known limitations
 
 These gaps can affect migration but do not block supported cutover workflows:
 
-- Python request callback, join, and pending-request convenience semantics are not complete.
+- Python request callbacks do not provide v1 joined-response, pending-request cleanup, or late and
+  duplicate delivery convenience behavior.
 - Python cannot inject Redis cache databases or external message-bus backing factories into
   `LiveNode`; Rust builders still expose those backings.
 - SQL cache position and synthetic loads, actor and strategy state persistence, and heartbeat remain
-  incomplete. The audited restart workflow uses the Redis backing through Rust builders; Python
-  `LiveNode` configuration cannot select that backing yet.
+  incomplete. Redis backing is available through Rust builders, but Python `LiveNode` configuration
+  cannot select it.
 - External message-bus publishing of serialized order and position snapshots remains deferred.
 - V2 `BacktestNode` does not yet support the v1 `StreamingConfig` and `DataCatalogConfig` iterator
   workflow.

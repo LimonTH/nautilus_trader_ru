@@ -24,7 +24,7 @@ use nautilus_common::{
     live::get_runtime,
     logging::logger::LoggerConfig,
     python::{
-        actor::{PyDataActor, register_python_exec_algorithm_endpoint},
+        actor::{PyDataActor, PyDataActorInner, register_python_exec_algorithm_endpoint},
         cache::PyCache,
     },
 };
@@ -433,7 +433,7 @@ impl LiveNode {
         self.kernel_mut()
             .trader
             .borrow_mut()
-            .add_actor_id_for_lifecycle(actor_id)
+            .add_actor_id_for_lifecycle::<PyDataActorInner>(actor_id)
             .map_err(to_pyruntime_err)?;
 
         log::info!("Registered Python actor {actor_id}");
@@ -1729,8 +1729,8 @@ mod tests {
             data::{BarsResponse, RequestBars},
             execution::{CancelAllOrders, SubmitOrder, TradingCommand},
         },
-        msgbus::get_message_bus,
-        runner::get_trading_cmd_sender,
+        msgbus::{MessagingSwitchboard, get_message_bus},
+        runner::{TradingCommandMessage, get_trading_cmd_sender},
     };
     use nautilus_core::{UUID4, UnixNanos};
     use nautilus_execution::engine::stubs::StubExecutionClient;
@@ -1784,8 +1784,9 @@ mod tests {
 
     impl DataActor for ShutdownCancelStrategy {
         fn on_stop(&mut self) -> anyhow::Result<()> {
-            get_trading_cmd_sender().execute(TradingCommand::CancelAllOrders(
-                CancelAllOrders::new(
+            get_trading_cmd_sender().execute(TradingCommandMessage::new(
+                MessagingSwitchboard::exec_engine_execute(),
+                TradingCommand::CancelAllOrders(CancelAllOrders::new(
                     TraderId::from("TESTER-001"),
                     None,
                     StrategyId::from("SHUTDOWN-CANCEL-001"),
@@ -1795,7 +1796,7 @@ mod tests {
                     UnixNanos::default(),
                     None,
                     None,
-                ),
+                )),
             ));
             Ok(())
         }

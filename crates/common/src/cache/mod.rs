@@ -49,9 +49,10 @@ pub use error::{
     INSTRUMENT_NOT_FOUND, InstrumentLookupError, ORDER_BOOK_NOT_FOUND, ORDER_LIST_NOT_FOUND,
     ORDER_NOT_FOUND, OWN_ORDER_BOOK_NOT_FOUND, OrderBookLookupError, OrderListLookupError,
     OrderLookupError, OwnOrderBookLookupError, POSITION_NOT_FOUND, PositionLookupError,
-    SYNTHETIC_INSTRUMENT_NOT_FOUND, SyntheticInstrumentLookupError,
+    SYNTHETIC_INSTRUMENT_NOT_FOUND, SyntheticInstrumentLookupError, VenueOrderIdOwnershipError,
 };
 use index::CacheIndex;
+use indexmap::IndexMap;
 use nautilus_core::{
     SharedCell, UnixNanos,
     correctness::{
@@ -1602,6 +1603,46 @@ impl<'a> CacheApi<'a> {
         self.cache().trade_count(instrument_id)
     }
 
+    /// Returns the mark price update count for the `instrument_id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cache is already mutably borrowed.
+    #[must_use]
+    pub fn mark_price_count(&self, instrument_id: &InstrumentId) -> usize {
+        self.cache().mark_price_count(instrument_id)
+    }
+
+    /// Returns the index price update count for the `instrument_id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cache is already mutably borrowed.
+    #[must_use]
+    pub fn index_price_count(&self, instrument_id: &InstrumentId) -> usize {
+        self.cache().index_price_count(instrument_id)
+    }
+
+    /// Returns the funding rate update count for the `instrument_id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cache is already mutably borrowed.
+    #[must_use]
+    pub fn funding_rate_count(&self, instrument_id: &InstrumentId) -> usize {
+        self.cache().funding_rate_count(instrument_id)
+    }
+
+    /// Returns the instrument status update count for the `instrument_id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cache is already mutably borrowed.
+    #[must_use]
+    pub fn instrument_status_count(&self, instrument_id: &InstrumentId) -> usize {
+        self.cache().instrument_status_count(instrument_id)
+    }
+
     /// Returns the bar count for the `bar_type`.
     ///
     /// # Panics
@@ -1640,6 +1681,46 @@ impl<'a> CacheApi<'a> {
     #[must_use]
     pub fn has_trade_ticks(&self, instrument_id: &InstrumentId) -> bool {
         self.cache().has_trade_ticks(instrument_id)
+    }
+
+    /// Returns whether the cache contains mark price updates for the `instrument_id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cache is already mutably borrowed.
+    #[must_use]
+    pub fn has_mark_prices(&self, instrument_id: &InstrumentId) -> bool {
+        self.cache().has_mark_prices(instrument_id)
+    }
+
+    /// Returns whether the cache contains index price updates for the `instrument_id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cache is already mutably borrowed.
+    #[must_use]
+    pub fn has_index_prices(&self, instrument_id: &InstrumentId) -> bool {
+        self.cache().has_index_prices(instrument_id)
+    }
+
+    /// Returns whether the cache contains funding rate updates for the `instrument_id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cache is already mutably borrowed.
+    #[must_use]
+    pub fn has_funding_rates(&self, instrument_id: &InstrumentId) -> bool {
+        self.cache().has_funding_rates(instrument_id)
+    }
+
+    /// Returns whether the cache contains instrument status updates for the `instrument_id`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the cache is already mutably borrowed.
+    #[must_use]
+    pub fn has_instrument_statuses(&self, instrument_id: &InstrumentId) -> bool {
+        self.cache().has_instrument_statuses(instrument_id)
     }
 
     /// Returns whether the cache contains bars for the `bar_type`.
@@ -2448,11 +2529,15 @@ impl Cache {
                 .or_default()
                 .insert(*client_order_id);
 
-            // 2: Build index.order_ids -> {VenueOrderId, ClientOrderId}
+            // 2: Build index.venue_order_ids -> {VenueOrderId, ClientOrderId}
+            //    and index.client_order_ids -> {ClientOrderId, VenueOrderId}
             if let Some(venue_order_id) = order.venue_order_id() {
                 self.index
                     .venue_order_ids
                     .insert(venue_order_id, *client_order_id);
+                self.index
+                    .client_order_ids
+                    .insert(*client_order_id, venue_order_id);
             }
 
             // 3: Build index.order_position -> {ClientOrderId, PositionId}
@@ -2653,6 +2738,88 @@ impl Cache {
     #[must_use]
     pub const fn has_backing(&self) -> bool {
         self.database.is_some()
+    }
+
+    /// Loads persisted actor state.
+    ///
+    /// Returns `None` when the cache has no backing database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if loading actor state fails.
+    pub fn load_actor_state(
+        &self,
+        component_id: &ComponentId,
+    ) -> anyhow::Result<Option<IndexMap<String, Vec<u8>>>> {
+        self.database
+            .as_ref()
+            .map(|database| database.load_actor(component_id))
+            .transpose()
+            .map(|state| state.map(Self::decode_component_state))
+    }
+
+    /// Loads persisted strategy state.
+    ///
+    /// Returns `None` when the cache has no backing database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if loading strategy state fails.
+    pub fn load_strategy_state(
+        &self,
+        strategy_id: &StrategyId,
+    ) -> anyhow::Result<Option<IndexMap<String, Vec<u8>>>> {
+        self.database
+            .as_ref()
+            .map(|database| database.load_strategy(strategy_id))
+            .transpose()
+            .map(|state| state.map(Self::decode_component_state))
+    }
+
+    /// Persists actor state when the cache has a backing database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if updating actor state fails.
+    pub fn update_actor_state(
+        &self,
+        component_id: &ComponentId,
+        state: &IndexMap<String, Vec<u8>>,
+    ) -> anyhow::Result<()> {
+        if let Some(database) = &self.database {
+            database.update_actor(component_id, &Self::encode_component_state(state))?;
+        }
+        Ok(())
+    }
+
+    /// Persists strategy state when the cache has a backing database.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if updating strategy state fails.
+    pub fn update_strategy_state(
+        &self,
+        strategy_id: &StrategyId,
+        state: &IndexMap<String, Vec<u8>>,
+    ) -> anyhow::Result<()> {
+        if let Some(database) = &self.database {
+            database.update_strategy(strategy_id, &Self::encode_component_state(state))?;
+        }
+        Ok(())
+    }
+
+    fn decode_component_state(state: AHashMap<String, Bytes>) -> IndexMap<String, Vec<u8>> {
+        state
+            .into_iter()
+            .map(|(key, value)| (key, value.to_vec()))
+            .collect()
+    }
+
+    fn encode_component_state(state: &IndexMap<String, Vec<u8>>) -> AHashMap<String, Bytes> {
+        state
+            .iter()
+            .map(|(key, value)| (key.clone(), Bytes::copy_from_slice(value)))
+            .collect()
     }
 
     // Calculate the unrealized profit and loss (PnL) for `position`.
@@ -3695,7 +3862,7 @@ impl Cache {
     /// Resets the cache.
     ///
     /// All stateful fields are reset to their initial value. Instruments,
-    /// currencies and synthetics are retained when `drop_instruments_on_reset`
+    /// currencies, and synthetics are retained when `drop_instruments_on_reset`
     /// is `false` so that repeated backtest runs can reuse the same dataset.
     pub fn reset(&mut self) {
         log::debug!("Resetting cache");
@@ -4233,13 +4400,34 @@ impl Cache {
     ///
     /// # Errors
     ///
-    /// Returns an error if the existing venue order ID conflicts and overwrite is false.
+    /// Returns an error if the client already has a different venue order ID and `overwrite` is
+    /// false, or if the venue order ID is owned by a different client order.
     pub fn add_venue_order_id(
         &mut self,
         client_order_id: &ClientOrderId,
         venue_order_id: &VenueOrderId,
         overwrite: bool,
     ) -> anyhow::Result<()> {
+        self.validate_venue_order_id_claim(client_order_id, venue_order_id, overwrite)?;
+
+        self.index
+            .client_order_ids
+            .insert(*client_order_id, *venue_order_id);
+        self.index
+            .venue_order_ids
+            .insert(*venue_order_id, *client_order_id);
+
+        Ok(())
+    }
+
+    fn validate_venue_order_id_claim(
+        &self,
+        client_order_id: &ClientOrderId,
+        venue_order_id: &VenueOrderId,
+        overwrite: bool,
+    ) -> anyhow::Result<()> {
+        self.validate_venue_order_id_ownership(client_order_id, venue_order_id)?;
+
         if let Some(existing_venue_order_id) = self.index.client_order_ids.get(client_order_id)
             && !overwrite
             && existing_venue_order_id != venue_order_id
@@ -4252,12 +4440,24 @@ impl Cache {
             );
         }
 
-        self.index
-            .client_order_ids
-            .insert(*client_order_id, *venue_order_id);
-        self.index
-            .venue_order_ids
-            .insert(*venue_order_id, *client_order_id);
+        Ok(())
+    }
+
+    fn validate_venue_order_id_ownership(
+        &self,
+        client_order_id: &ClientOrderId,
+        venue_order_id: &VenueOrderId,
+    ) -> anyhow::Result<()> {
+        if let Some(existing_client_order_id) = self.index.venue_order_ids.get(venue_order_id)
+            && existing_client_order_id != client_order_id
+        {
+            return Err(VenueOrderIdOwnershipError {
+                venue_order_id: *venue_order_id,
+                existing_client_order_id: *existing_client_order_id,
+                claimant_client_order_id: *client_order_id,
+            }
+            .into());
+        }
 
         Ok(())
     }
@@ -4745,6 +4945,14 @@ impl Cache {
         // post-event value back into the cell so subsequent reads see the new state.
         let mut snapshot = order_cell.borrow().clone();
         snapshot.apply(event.clone())?;
+
+        // Preflight only reverse ownership. A same-client forward mismatch remains a logged
+        // refresh inconsistency, while other refresh failures, such as a backing database error,
+        // remain logged after the canonical state is committed.
+        if let Some(venue_order_id) = snapshot.venue_order_id() {
+            self.validate_venue_order_id_ownership(&client_order_id, &venue_order_id)?;
+        }
+
         *order_cell.borrow_mut() = snapshot.clone();
 
         if let Err(e) = self.refresh_order(&snapshot) {
@@ -4757,24 +4965,22 @@ impl Cache {
     fn refresh_order(&mut self, order: &OrderAny) -> anyhow::Result<()> {
         let client_order_id = order.client_order_id();
 
+        // Claim the venue order ID before mutating any other derived state. An updated event may
+        // change the current ID for the same client order, while historical reverse aliases remain.
+        if let Some(venue_order_id) = order.venue_order_id() {
+            let overwrite = matches!(order.last_event(), OrderEventAny::Updated(_));
+            if let Err(e) = self.add_venue_order_id(&client_order_id, &venue_order_id, overwrite) {
+                if e.is::<VenueOrderIdOwnershipError>() {
+                    return Err(e);
+                }
+                log::error!("Error indexing venue order ID in cache: {e}");
+            }
+        }
+
         if order.is_active_local() {
             self.index.orders_active_local.insert(client_order_id);
         } else {
             self.index.orders_active_local.remove(&client_order_id);
-        }
-
-        // Update venue order ID
-        if let Some(venue_order_id) = order.venue_order_id() {
-            // If the order is being modified then we allow a changing `VenueOrderId` to accommodate
-            // venues which use a cancel+replace update strategy.
-            if !self.index.venue_order_ids.contains_key(&venue_order_id) {
-                let overwrite = matches!(order.last_event(), OrderEventAny::Updated(_));
-                if let Err(e) =
-                    self.add_venue_order_id(&order.client_order_id(), &venue_order_id, overwrite)
-                {
-                    log::error!("Error indexing venue order ID in cache: {e}");
-                }
-            }
         }
 
         // Update in-flight state
@@ -4792,6 +4998,11 @@ impl Cache {
             self.index.orders_open.remove(&client_order_id);
             self.index.orders_pending_cancel.remove(&client_order_id);
             self.index.orders_closed.insert(client_order_id);
+        }
+
+        // A cancel rejection resolves the outstanding cancel request
+        if matches!(order.last_event(), OrderEventAny::CancelRejected(_)) {
+            self.index.orders_pending_cancel.remove(&client_order_id);
         }
 
         // Update emulation index
@@ -7279,6 +7490,38 @@ impl Cache {
             .map_or(0, BoundedVecDeque::len)
     }
 
+    /// Gets the mark price update count for the `instrument_id`.
+    #[must_use]
+    pub fn mark_price_count(&self, instrument_id: &InstrumentId) -> usize {
+        self.mark_prices
+            .get(instrument_id)
+            .map_or(0, BoundedVecDeque::len)
+    }
+
+    /// Gets the index price update count for the `instrument_id`.
+    #[must_use]
+    pub fn index_price_count(&self, instrument_id: &InstrumentId) -> usize {
+        self.index_prices
+            .get(instrument_id)
+            .map_or(0, BoundedVecDeque::len)
+    }
+
+    /// Gets the funding rate update count for the `instrument_id`.
+    #[must_use]
+    pub fn funding_rate_count(&self, instrument_id: &InstrumentId) -> usize {
+        self.funding_rates
+            .get(instrument_id)
+            .map_or(0, BoundedVecDeque::len)
+    }
+
+    /// Gets the instrument status update count for the `instrument_id`.
+    #[must_use]
+    pub fn instrument_status_count(&self, instrument_id: &InstrumentId) -> usize {
+        self.instrument_statuses
+            .get(instrument_id)
+            .map_or(0, BoundedVecDeque::len)
+    }
+
     /// Gets the bar count for the `instrument_id`.
     #[must_use]
     pub fn bar_count(&self, bar_type: &BarType) -> usize {
@@ -7303,6 +7546,30 @@ impl Cache {
         self.trade_count(instrument_id) > 0
     }
 
+    /// Returns whether the cache contains mark price updates for the `instrument_id`.
+    #[must_use]
+    pub fn has_mark_prices(&self, instrument_id: &InstrumentId) -> bool {
+        self.mark_price_count(instrument_id) > 0
+    }
+
+    /// Returns whether the cache contains index price updates for the `instrument_id`.
+    #[must_use]
+    pub fn has_index_prices(&self, instrument_id: &InstrumentId) -> bool {
+        self.index_price_count(instrument_id) > 0
+    }
+
+    /// Returns whether the cache contains funding rate updates for the `instrument_id`.
+    #[must_use]
+    pub fn has_funding_rates(&self, instrument_id: &InstrumentId) -> bool {
+        self.funding_rate_count(instrument_id) > 0
+    }
+
+    /// Returns whether the cache contains instrument status updates for the `instrument_id`.
+    #[must_use]
+    pub fn has_instrument_statuses(&self, instrument_id: &InstrumentId) -> bool {
+        self.instrument_status_count(instrument_id) > 0
+    }
+
     /// Returns whether the cache contains bars for the `bar_type`.
     #[must_use]
     pub fn has_bars(&self, bar_type: &BarType) -> bool {
@@ -7317,27 +7584,43 @@ impl Cache {
         to_currency: Currency,
         price_type: PriceType,
     ) -> Option<Decimal> {
-        if from_currency == to_currency {
-            // When the source and target currencies are identical,
-            // no conversion is needed; return an exchange rate of one.
-            return Some(Decimal::ONE);
-        }
-
-        let (bid_quote, ask_quote) = self.build_quote_table(&venue);
-
-        match get_exchange_rate(
-            from_currency.code,
-            to_currency.code,
-            price_type,
-            bid_quote,
-            ask_quote,
-        ) {
+        match self.try_get_xrate(venue, from_currency, to_currency, price_type) {
             Ok(rate) => rate,
             Err(e) => {
                 log::error!("Failed to calculate xrate: {e}");
                 None
             }
         }
+    }
+
+    /// Tries to calculate the exchange rate without logging calculation errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the cached quotes cannot form a valid exchange
+    /// rate calculation.
+    pub fn try_get_xrate(
+        &self,
+        venue: Venue,
+        from_currency: Currency,
+        to_currency: Currency,
+        price_type: PriceType,
+    ) -> anyhow::Result<Option<Decimal>> {
+        if from_currency == to_currency {
+            // When the source and target currencies are identical,
+            // no conversion is needed; return an exchange rate of one.
+            return Ok(Some(Decimal::ONE));
+        }
+
+        let (bid_quote, ask_quote) = self.build_quote_table(&venue);
+
+        get_exchange_rate(
+            from_currency.code,
+            to_currency.code,
+            price_type,
+            bid_quote,
+            ask_quote,
+        )
     }
 
     fn build_quote_table(
@@ -7359,34 +7642,36 @@ impl Cache {
                     continue; // Empty ticks vector
                 }
             } else {
-                let bid_bar = self
-                    .bars
-                    .iter()
-                    .find(|(k, _)| {
-                        k.instrument_id() == *instrument_id
-                            && matches!(k.spec().price_type, PriceType::Bid)
-                    })
-                    .map(|(_, v)| v);
+                // Multiple bar types may exist per instrument: select the most recently added
+                // bar per side, preferring the greatest ts_init for determinism and breaking
+                // ties by bar type.
+                let mut latest_bid: Option<(&BarType, &Bar)> = None;
+                let mut latest_ask: Option<(&BarType, &Bar)> = None;
 
-                let ask_bar = self
-                    .bars
-                    .iter()
-                    .find(|(k, _)| {
-                        k.instrument_id() == *instrument_id
-                            && matches!(k.spec().price_type, PriceType::Ask)
-                    })
-                    .map(|(_, v)| v);
-
-                match (bid_bar, ask_bar) {
-                    (Some(bid), Some(ask)) => {
-                        match (bid.front(), ask.front()) {
-                            (Some(bid_bar), Some(ask_bar)) => (bid_bar.close, ask_bar.close),
-                            _ => {
-                                // Empty bar VecDeques
-                                continue;
-                            }
-                        }
+                for (bar_type, bars) in &self.bars {
+                    if bar_type.instrument_id() != *instrument_id {
+                        continue;
                     }
+
+                    let Some(bar) = bars.front() else {
+                        continue;
+                    };
+
+                    let slot = match bar_type.spec().price_type {
+                        PriceType::Bid => &mut latest_bid,
+                        PriceType::Ask => &mut latest_ask,
+                        _ => continue,
+                    };
+
+                    if slot.is_none_or(|(current_type, current)| {
+                        (current.ts_init, current_type) < (bar.ts_init, bar_type)
+                    }) {
+                        *slot = Some((bar_type, bar));
+                    }
+                }
+
+                match (latest_bid, latest_ask) {
+                    (Some((_, bid_bar)), Some((_, ask_bar))) => (bid_bar.close, ask_bar.close),
                     _ => continue,
                 }
             };
@@ -7416,7 +7701,11 @@ impl Cache {
             .insert((to_currency, from_currency), 1.0 / xrate);
     }
 
-    /// Clears the mark exchange rate for the given currency pair.
+    /// Clears the mark exchange rate for the given currency pair direction.
+    ///
+    /// Removes only the `(from_currency, to_currency)` entry; the inverse rate written
+    /// by [`Self::set_mark_xrate`] is retained until cleared separately or
+    /// [`Self::clear_mark_xrates`] is called.
     pub fn clear_mark_xrate(&mut self, from_currency: Currency, to_currency: Currency) {
         let _ = self.mark_xrates.remove(&(from_currency, to_currency));
     }

@@ -1876,13 +1876,13 @@ fn validate_order_for_ax_submit(order: &OrderAny) -> anyhow::Result<()> {
         );
     }
 
-    // AX accepts only GTC, IOC and DAY; deny others locally to avoid an opaque venue error
+    // AX accepts only GTC, IOC, and DAY; deny others locally to avoid an opaque venue error
     if !matches!(
         order.time_in_force(),
         TimeInForce::Gtc | TimeInForce::Ioc | TimeInForce::Day
     ) {
         anyhow::bail!(
-            "Unsupported time in force: {:?}, AX supports GTC, IOC and DAY",
+            "Unsupported time in force: {:?}, AX supports GTC, IOC, and DAY",
             order.time_in_force(),
         );
     }
@@ -1986,7 +1986,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        common::enums::{AxOrderSide, AxOrderStatus, AxTimeInForce, AxTradeSide},
+        common::enums::{AxOrderSide, AxOrderStatus, AxTimeInForce},
         http::error::AxBuildError,
         websocket::{
             messages::{AxWsOrderExpired, AxWsTradeExecution, OrderMetadata},
@@ -2119,7 +2119,7 @@ mod tests {
             s: Ustr::from("BTC-PERP"),
             q: qty,
             p: price,
-            d: AxTradeSide::Buy,
+            d: AxOrderSide::Buy,
             agg,
         }
     }

@@ -26,7 +26,7 @@
 //! objects.
 //!
 //! Alternative implementations can be written on top of the generic engine - which
-//! just need to override the `execute`, `process`, `send` and `receive` methods.
+//! just need to override the `execute`, `process`, `send`, and `receive` methods.
 
 pub mod bar;
 pub mod book;
@@ -2387,7 +2387,7 @@ impl DataEngine {
         !self.config.disable_historical_cache
     }
 
-    fn handle_instrument(&mut self, instrument: &InstrumentAny) {
+    pub(crate) fn handle_instrument(&mut self, instrument: &InstrumentAny) {
         log::debug!("Handling instrument: {}", instrument.id());
 
         if let Err(e) = self
