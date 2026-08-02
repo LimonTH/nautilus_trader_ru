@@ -1,34 +1,5 @@
 # T-Invest (MOEX)
 
-<<<<<<< Updated upstream
-[T-Invest](https://www.tinkoff.ru/invest/) is a brokerage platform by Tinkoff Bank that provides
-access to the Moscow Exchange (MOEX). The adapter supports equities, bonds, futures, and options
-on Russian and international markets.
-
-This integration supports live market data ingest and order execution with T-Invest.
-
-## Examples
-
-You can find live example scripts in the [examples/live/tinvest](https://github.com/nautechsystems/nautilus_trader/tree/develop/examples/live/tinvest/) directory.
-
-## Overview
-
-This guide assumes a trader is setting up for both live market data feeds, and trade execution.
-The T-Invest adapter includes multiple components, which can be used together or separately
-depending on the use case.
-
-- `TinvestHttpClient`: Low-level HTTP API connectivity.
-- `TinvestMarketDataStream`: WebSocket market data stream.
-- `TinvestInstrumentProvider`: Instrument parsing and loading functionality.
-- `TinvestDataClient`: A market data feed manager.
-- `TinvestExecutionClient`: An account management and trade execution gateway.
-- `TinvestLiveDataClientFactory`: Factory for T-Invest data clients (used by the trading node builder).
-- `TinvestLiveExecClientFactory`: Factory for T-Invest execution clients (used by the trading node builder).
-
-:::note
-Most users will define a configuration for a live trading node (as below),
-and won't need to necessarily work with these lower level components directly.
-=======
 [T-Invest](https://developer.tbank.ru/invest/intro/intro) (formerly Tinkoff Invest) is a brokerage API
 provided by T-Bank (formerly Tinkoff) for trading on the Moscow Exchange (MOEX). It offers access to
 Russian equities, bonds, ETFs, futures, options, and currencies through a gRPC API.
@@ -63,16 +34,10 @@ on the use case:
 :::note
 Most users will define a configuration for a live trading node (as below),
 and won't need to work with these lower-level components directly.
->>>>>>> Stashed changes
 :::
 
 ## T-Invest documentation
 
-<<<<<<< Updated upstream
-T-Invest provides documentation for developers which can be found at the
-[T-Invest API documentation](https://tinkoff.github.io/investAPI/).
-It's recommended you also refer to the T-Invest API documentation in conjunction with this
-=======
 T-Invest provides extensive documentation for developers:
 
 - [T-Invest API Introduction](https://developer.tbank.ru/invest/intro/intro): Main entry point for API access.
@@ -80,37 +45,10 @@ T-Invest provides extensive documentation for developers:
 - [T-Invest Sandbox](https://developer.tbank.ru/invest/intro/developer/sandbox/): Sandbox environment documentation.
 
 It's recommended you also refer to the T-Invest documentation in conjunction with this
->>>>>>> Stashed changes
 NautilusTrader integration guide.
 
 ## Products
 
-<<<<<<< Updated upstream
-The adapter supports the following instrument types available on MOEX:
-
-| Venue category | Examples | Nautilus asset class |
-| -------------- | -------- | --------------------- |
-| Equities       | `YNDX`  | Equity                |
-| Bonds          | `RU000A1038V6` | Fixed Income    |
-| Futures        | `Si-6.24` | Future             |
-| Options        | `SiH400000GA` | Option          |
-
-The adapter represents T-Invest instruments using standard NautilusTrader domain types:
-`Equity`, `Future`, and `OptionContract`.
-
-## Symbology
-
-The adapter preserves T-Invest `figi` and `ticker` symbols and appends the Nautilus venue
-identifier `.TINVEST`. Perpetual contracts do not exist on MOEX; futures have fixed expiration dates.
-
-| Instrument    | T-Invest FIGI/Ticker | Nautilus InstrumentId |
-| ------------- | -------------------- | --------------------- |
-| Yandex equity | `BBG006L8G4H1` / `YNDX` | `YNDX.TINVEST`      |
-| Si futures    | `FUT_SI_0624` / `Si-6.24` | `Si-6.24.TINVEST`   |
-| Option        | Option FIGI | `SiH400000GA.TINVEST` |
-
-The venue identifier is `TINVEST`. To construct a Nautilus `InstrumentId`:
-=======
 The T-Invest API provides access to the following instrument types on the Moscow Exchange (MOEX):
 
 | Product Type | Supported | Notes                                    |
@@ -139,249 +77,10 @@ Examples:
 - `BBG00QPYJ5H0.TINVEST` - USD/RUB futures (Si)
 
 To subscribe in your strategy:
->>>>>>> Stashed changes
 
 ```python
 from nautilus_trader.model.identifiers import InstrumentId
 
-<<<<<<< Updated upstream
-instrument_id = InstrumentId.from_str("YNDX.TINVEST")
-```
-
-## Environments
-
-T-Invest provides two trading environments. Configure the appropriate environment using the
-`environment` parameter in your client configuration.
-
-| Environment    | Config                                 | Description                            |
-| -------------- | -------------------------------------- | -------------------------------------- |
-| **Sandbox**    | `environment=TinvestEnvironment.SANDBOX`    | Test environment with simulated funds. |
-| **Production** | `environment=TinvestEnvironment.PRODUCTION` | Live trading with real funds.          |
-
-### Sandbox
-
-The default environment for development and testing with simulated funds.
-All sandbox endpoints are resolved automatically when `environment=TinvestEnvironment.SANDBOX`.
-
-#### 1. Create a sandbox account
-
-Follow the [T-Invest documentation](https://tinkoff.github.io/investAPI/) to obtain API access.
-You need a Tinkoff Open API sandbox account.
-
-#### 2. Create API tokens
-
-Use the T-Invest sandbox UI to generate API tokens.
-Store the `token` securely.
-
-#### 3. Set environment variables
-
-```bash
-export TINVEST_API_TOKEN="your-sandbox-token"
-```
-
-#### 4. Configure the trading node
-
-```python
-config = TradingNodeConfig(
-    ...,  # Omitted
-    data_clients={
-        TINVEST: TinvestDataClientConfig(
-            environment=TinvestEnvironment.SANDBOX,
-            instrument_provider=InstrumentProviderConfig(load_all=True),
-        ),
-    },
-    exec_clients={
-        TINVEST: TinvestExecClientConfig(
-            environment=TinvestEnvironment.SANDBOX,
-            instrument_provider=InstrumentProviderConfig(load_all=True),
-        ),
-    },
-)
-```
-
-### Production
-
-For live trading with real funds. Requires a verified T-Invest account.
-
-```python
-config = TinvestExecClientConfig(
-    environment=TinvestEnvironment.PRODUCTION,
-)
-```
-
-:::warning
-Ensure you are using the correct environment before placing orders.
-Sandbox is the default to prevent accidental live trading.
-:::
-
-## Market data
-
-The adapter provides real-time market data via WebSocket subscriptions, with HTTP endpoints
-for historical data backfill.
-
-### Data types
-
-| T-Invest Data        | Nautilus Data Type   | Notes                                                     |
-| -------------------- | -------------------- | ---------------------------------------------------------- |
-| Order book (L1)      | `QuoteTick`          | Best bid/ask top‑of‑book from L1 book subscription.        |
-| Order book (L2)      | `OrderBookDelta`     | Aggregated price levels.                                   |
-| Trades               | `TradeTick`          | Real‑time trade events from trade‑only WebSocket subscription. |
-| Bars/candles         | `Bar`                | OHLCV data (total volume only, no buy/sell breakdown).     |
-| Instrument status    | `InstrumentStatus`   | State changes (open, halted, closed) from subscription.    |
-
-### WebSocket subscription behavior
-
-T-Invest market data WebSocket subscriptions use one active stream per account. The adapter
-manages subscriptions automatically based on the configured instrument universe.
-
-### Bar intervals
-
-| Interval | Description |
-| -------- | ----------- |
-| `1m`     | 1-minute    |
-| `5m`     | 5-minute    |
-| `15m`    | 15-minute   |
-| `1h`     | 1-hour      |
-| `1d`     | 1-day       |
-
-## Orders capability
-
-### Nautilus order types
-
-| Order Type             | Supported | Notes                                           |
-| ---------------------- | --------- | ----------------------------------------------- |
-| `MARKET`               | ✓         | Adapter‑simulated with an aggressive IOC price. |
-| `LIMIT`                | ✓         | Standard limit order.                           |
-| `STOP_LIMIT`           | -         | *Not supported*.                                |
-| `LIMIT_IF_TOUCHED`     | -         | *Not supported*.                                |
-| `STOP_MARKET`          | -         | *Not supported*.                                |
-| `MARKET_IF_TOUCHED`    | -         | *Not supported*.                                |
-| `TRAILING_STOP_MARKET` | -         | *Not supported*.                                |
-
-### Execution instructions
-
-| Instruction      | Supported | Notes                                                         |
-| ---------------- | --------- | ------------------------------------------------------------- |
-| `post_only`      | ✓         | Maker‑only; rejected if the order would take.                 |
-| `reduce_only`    | -         | Rejected locally; T-Invest exposes no reduce‑only field.      |
-| `quote_quantity` | -         | Rejected locally; the adapter wire path encodes base only.    |
-| `display_qty`    | -         | Rejected locally; the adapter wire path has no display field. |
-
-### Time in force
-
-| Time in Force  | Supported | Notes                            |
-| -------------- | --------- | -------------------------------- |
-| `GTC`          | ✓         | Good Till Canceled.              |
-| `GTD`          | -         | Rejected locally by the adapter. |
-| `DAY`          | ✓         | Valid until end of trading day.  |
-| `IOC`          | ✓         | Immediate or Cancel.             |
-| `FOK`          | ✓         | Fill or Kill.                    |
-
-### Advanced order features
-
-| Feature            | Supported | Notes                                                              |
-| ------------------ | --------- | ------------------------------------------------------------------ |
-| Order modification | ✓         | Supports order replacement.                                        |
-| Cancel order       | ✓         | Single order cancellation.                                         |
-| Cancel all orders  | ✓         | Cancel all open orders.                                            |
-| Batch cancel       | -         | The adapter sends individual cancels.                              |
-| Order lists        | -         | *Not supported*.                                                   |
-
-### Position management
-
-| Feature         | Supported | Notes                                |
-| --------------- | --------- | ------------------------------------ |
-| Query positions | ✓         | Real‑time position updates.          |
-| Position mode   | -         | Netting mode only.                   |
-| Cross margin    | -         | Not applicable to equities trading.  |
-
-### Order querying
-
-| Feature              | Supported | Notes                                                   |
-| -------------------- | --------- | ------------------------------------------------------- |
-| Query open orders    | ✓         | List all active orders.                                 |
-| Query single order   | ✓         | By venue order ID or client order ID (any order state). |
-| Order status reports | ✓         | Open‑order checks and historical startup mass status.   |
-| Fill reports         | ✓         | Execution and fill history.                             |
-
-## Authentication
-
-T-Invest uses bearer token authentication:
-
-1. API token is passed via the `Authorization` header.
-2. The adapter requests session tokens and reuses them for REST and WebSocket requests.
-3. Sandbox tokens are validated automatically.
-
-## Configuration
-
-### Data client configuration options
-
-| Option                             | Default   | Description                                                         |
-| ---------------------------------- | --------- | ------------------------------------------------------------------- |
-| `token`                            | `None`    | API token; loaded from `TINVEST_API_TOKEN` env var when omitted.        |
-| `environment`                      | `SANDBOX` | Trading environment (`SANDBOX` or `PRODUCTION`).                    |
-| `base_url_http`                    | `None`    | Override for the REST base URL.                                     |
-| `base_url_ws`                      | `None`    | Override for the market data WebSocket URL.                         |
-| `proxy_url`                        | `None`    | Optional proxy URL for HTTP and WebSocket transports.               |
-| `update_instruments_interval_mins` | `60`      | Interval (minutes) between instrument catalog refreshes.            |
-
-### Execution client configuration options
-
-| Option                             | Default   | Description                                                         |
-| ---------------------------------- | --------- | ------------------------------------------------------------------- |
-| `token`                            | `None`    | API token; loaded from `TINVEST_API_TOKEN` env var when omitted.        |
-| `environment`                      | `SANDBOX` | Trading environment (`SANDBOX` or `PRODUCTION`).                    |
-| `base_url_http`                   | `None`    | Override for the REST base URL.                                     |
-| `base_url_ws`                      | `None`    | Override for the orders WebSocket URL.                              |
-| `proxy_url`                        | `None`    | Optional proxy URL for HTTP and WebSocket transports.               |
-| `update_instruments_interval_mins` | `60`      | Interval (minutes) between instrument catalog refreshes.            |
-
-The most common use case is to configure a live `TradingNode` to include T-Invest
-data and execution clients. To achieve this, add a `TINVEST` section to your client
-configuration(s):
-
-```python
-from nautilus_trader.adapters.tinvest import TINVEST
-from nautilus_trader.adapters.tinvest import TinvestDataClientConfig
-from nautilus_trader.adapters.tinvest import TinvestEnvironment
-from nautilus_trader.adapters.tinvest import TinvestExecClientConfig
-from nautilus_trader.config import InstrumentProviderConfig
-from nautilus_trader.config import TradingNodeConfig
-
-config = TradingNodeConfig(
-    ...,  # Omitted
-    data_clients={
-        TINVEST: TinvestDataClientConfig(
-            environment=TinvestEnvironment.SANDBOX,
-            instrument_provider=InstrumentProviderConfig(load_all=True),
-        ),
-    },
-    exec_clients={
-        TINVEST: TinvestExecClientConfig(
-            environment=TinvestEnvironment.SANDBOX,
-            instrument_provider=InstrumentProviderConfig(load_all=True),
-        ),
-    },
-)
-```
-
-Then, create a `TradingNode` and add the client factories:
-
-```python
-from nautilus_trader.adapters.tinvest import TINVEST
-from nautilus_trader.adapters.tinvest import TinvestLiveDataClientFactory
-from nautilus_trader.adapters.tinvest import TinvestLiveExecClientFactory
-from nautilus_trader.live.node import TradingNode
-
-# Instantiate the live trading node with a configuration
-node = TradingNode(config=config)
-
-# Register the client factories with the node
-node.add_data_client_factory(TINVEST, TinvestLiveDataClientFactory)
-node.add_exec_client_factory(TINVEST, TinvestLiveExecClientFactory)
-
-# Finally build the node
-=======
 instrument_id = InstrumentId.from_str("BBG004730N88.TINVEST")
 ```
 
@@ -794,7 +493,6 @@ config = TradingNodeConfig(
 node = TradingNode(config=config)
 node.add_data_client_factory(TINVEST, TInvestLiveDataClientFactory)
 node.add_exec_client_factory(TINVEST, TInvestLiveExecClientFactory)
->>>>>>> Stashed changes
 node.build()
 ```
 
@@ -804,12 +502,8 @@ There are two options for supplying your credentials to the T-Invest clients.
 Either pass the corresponding `token` value to the configuration objects, or
 set the following environment variables:
 
-<<<<<<< Updated upstream
-- `TINVEST_API_TOKEN`
-=======
 - `TINVEST_API_TOKEN`: API token for production trading.
 - `TINVEST_SANDBOX_TOKEN`: API token for sandbox testing.
->>>>>>> Stashed changes
 
 :::tip
 We recommend using environment variables to manage your credentials.
@@ -818,25 +512,6 @@ We recommend using environment variables to manage your credentials.
 When starting the trading node, you'll receive immediate confirmation of whether your
 credentials are valid and have trading permissions.
 
-<<<<<<< Updated upstream
-## Implementation notes
-
-- **MOEX instruments**: The adapter handles equities, bonds, futures, and options listed on MOEX.
-- **Instrument loading**: The adapter refreshes the instrument catalog on a configurable interval
-  to pick up new listings and delistings.
-- **Rate limiting**: The adapter respects T-Invest rate limits with automatic retries.
-- **Market orders**: T-Invest does not support native market orders. The adapter uses a preview
-  endpoint to determine the take-through price and submits an aggressive IOC limit order.
-- **Order modification**: T-Invest supports atomic order replacement. The adapter maps `modify_order`
-  to the venue's replace mechanism.
-- **Instrument fee rates**: T-Invest reports maker and taker rates per account, so the
-  adapter resolves them after authenticating and applies them to every instrument. The execution
-  client fails to connect if that lookup fails, rather than reporting zero fees for the process
-  lifetime. A data client configured without credentials cannot read the rates and reports zero fees.
-- **Fill commissions**: Real-time fill events from REST do not include fee data.
-  Commission is reported as zero for streaming fills. During reconciliation, the REST
-  endpoint provides accurate fee information.
-=======
 ## Instrument provider
 
 The `TInvestInstrumentProvider` loads instrument definitions from the T-Invest API via gRPC.
@@ -885,7 +560,6 @@ The provider converts T-Invest instrument types to Nautilus instruments:
 - **Streaming**: Real-time data and order updates are delivered via gRPC server-side and
   bidirectional streaming.
 - **Russian Trusted Root CA**: A PEM certificate is included for environments that require it.
->>>>>>> Stashed changes
 
 ## Contributing
 
