@@ -72,11 +72,11 @@ pub mod proto {
     tonic::include_proto!("tinkoff.public.invest.api.contract.v1");
 }
 
+pub mod client;
 pub mod common;
 pub mod config;
-pub mod client;
-pub mod enums;
 pub mod data;
+pub mod enums;
 pub mod execution;
 pub mod factories;
 pub mod providers;

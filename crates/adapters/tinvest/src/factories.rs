@@ -54,10 +54,7 @@ impl ClientConfig for TInvestClientConfig {
 #[derive(Debug, Clone)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(
-        module = "nautilus_trader.core.nautilus_pyo3.tinvest",
-        from_py_object
-    )
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.tinvest", from_py_object)
 )]
 #[cfg_attr(
     feature = "python",
@@ -120,10 +117,7 @@ impl DataClientFactory for TInvestDataClientFactory {
 #[derive(Debug, Clone)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(
-        module = "nautilus_trader.core.nautilus_pyo3.tinvest",
-        from_py_object
-    )
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.tinvest", from_py_object)
 )]
 #[cfg_attr(
     feature = "python",
@@ -173,9 +167,7 @@ impl ExecutionClientFactory for TInvestExecutionClientFactory {
             .as_deref()
             .map(AccountId::new)
             .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "TInvestClientConfig.account_id is required for execution client"
-                )
+                anyhow::anyhow!("TInvestClientConfig.account_id is required for execution client")
             })?;
 
         let client_id = ClientId::from(name);

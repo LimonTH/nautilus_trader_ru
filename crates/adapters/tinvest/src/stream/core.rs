@@ -18,29 +18,24 @@
 //! Manages bidirectional and server-side gRPC streams for real-time market data,
 //! order state updates, trades, and portfolio/position changes.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use tokio::sync::{mpsc, Mutex};
 use tokio::sync::oneshot;
+use tokio::sync::{Mutex, mpsc};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::client::TInvestGrpcClient;
 use crate::client::TInvestClientError;
+use crate::client::TInvestGrpcClient;
+use crate::proto::SubscriptionAction;
 use crate::proto::{
-    MarketDataRequest, MarketDataResponse,
-    MarketDataServerSideStreamRequest,
-    OrderStateStreamRequest,
-    TradesStreamRequest, TradesStreamResponse,
-    OperationsStreamRequest, OperationsStreamResponse,
-    PositionsStreamRequest, PositionsStreamResponse,
-    PortfolioStreamRequest, PortfolioStreamResponse,
-    SubscribeTradesRequest, SubscribeOrderBookRequest, SubscribeInfoRequest,
-    TradeInstrument, OrderBookInstrument, InfoInstrument,
-};
-use crate::proto::{
-    SubscriptionAction,
+    InfoInstrument, MarketDataRequest, MarketDataResponse, MarketDataServerSideStreamRequest,
+    OperationsStreamRequest, OperationsStreamResponse, OrderBookInstrument,
+    OrderStateStreamRequest, PortfolioStreamRequest, PortfolioStreamResponse,
+    PositionsStreamRequest, PositionsStreamResponse, SubscribeInfoRequest,
+    SubscribeOrderBookRequest, SubscribeTradesRequest, TradeInstrument, TradesStreamRequest,
+    TradesStreamResponse,
 };
 
 /// A declarative macro that generates a server-side gRPC stream struct and its
@@ -411,9 +406,9 @@ impl TInvestMarketDataStream {
     /// Subscribe to real-time trade ticks.
     pub async fn subscribe_trades(&self, instrument_id: &str) -> Result<(), tonic::Status> {
         let sender = self.sender.lock().await;
-        let sender = sender.as_ref().ok_or_else(|| {
-            tonic::Status::failed_precondition("Market data stream not started")
-        })?;
+        let sender = sender
+            .as_ref()
+            .ok_or_else(|| tonic::Status::failed_precondition("Market data stream not started"))?;
 
         #[allow(deprecated)]
         let request = MarketDataRequest {
@@ -443,9 +438,9 @@ impl TInvestMarketDataStream {
     /// Unsubscribe from trade ticks.
     pub async fn unsubscribe_trades(&self, instrument_id: &str) -> Result<(), tonic::Status> {
         let sender = self.sender.lock().await;
-        let sender = sender.as_ref().ok_or_else(|| {
-            tonic::Status::failed_precondition("Market data stream not started")
-        })?;
+        let sender = sender
+            .as_ref()
+            .ok_or_else(|| tonic::Status::failed_precondition("Market data stream not started"))?;
 
         #[allow(deprecated)]
         let request = MarketDataRequest {
@@ -479,9 +474,9 @@ impl TInvestMarketDataStream {
         depth: i32,
     ) -> Result<(), tonic::Status> {
         let sender = self.sender.lock().await;
-        let sender = sender.as_ref().ok_or_else(|| {
-            tonic::Status::failed_precondition("Market data stream not started")
-        })?;
+        let sender = sender
+            .as_ref()
+            .ok_or_else(|| tonic::Status::failed_precondition("Market data stream not started"))?;
 
         #[allow(deprecated)]
         let request = MarketDataRequest {
@@ -515,9 +510,9 @@ impl TInvestMarketDataStream {
         depth: i32,
     ) -> Result<(), tonic::Status> {
         let sender = self.sender.lock().await;
-        let sender = sender.as_ref().ok_or_else(|| {
-            tonic::Status::failed_precondition("Market data stream not started")
-        })?;
+        let sender = sender
+            .as_ref()
+            .ok_or_else(|| tonic::Status::failed_precondition("Market data stream not started"))?;
 
         #[allow(deprecated)]
         let request = MarketDataRequest {
@@ -547,9 +542,9 @@ impl TInvestMarketDataStream {
     /// Subscribe to instrument info (trading status) updates.
     pub async fn subscribe_info(&self, instrument_id: &str) -> Result<(), tonic::Status> {
         let sender = self.sender.lock().await;
-        let sender = sender.as_ref().ok_or_else(|| {
-            tonic::Status::failed_precondition("Market data stream not started")
-        })?;
+        let sender = sender
+            .as_ref()
+            .ok_or_else(|| tonic::Status::failed_precondition("Market data stream not started"))?;
 
         #[allow(deprecated)]
         let request = MarketDataRequest {

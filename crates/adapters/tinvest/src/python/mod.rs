@@ -25,7 +25,7 @@ use nautilus_system::get_global_pyo3_registry;
 use pyo3::prelude::*;
 
 use crate::config::TInvestClientConfig;
-use crate::factories::{TInvestDataClientFactory, TInvestExecutionClientFactory, TINVEST};
+use crate::factories::{TINVEST, TInvestDataClientFactory, TInvestExecutionClientFactory};
 use crate::python::factories::PyTInvestGrpcClient;
 use crate::python::stream::{
     PyTInvestMarketDataStream, PyTInvestOrderStateStream, PyTInvestPortfolioStream,
@@ -63,10 +63,7 @@ fn extract_tinvest_exec_factory(
 }
 
 #[expect(clippy::needless_pass_by_value)]
-fn extract_tinvest_config(
-    py: Python<'_>,
-    config: Py<PyAny>,
-) -> PyResult<Box<dyn ClientConfig>> {
+fn extract_tinvest_config(py: Python<'_>, config: Py<PyAny>) -> PyResult<Box<dyn ClientConfig>> {
     match config.extract::<TInvestClientConfig>(py) {
         Ok(c) => Ok(Box::new(c)),
         Err(e) => Err(to_pyvalue_err(format!(
@@ -114,10 +111,9 @@ pub fn tinvest(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     }
 
     // Register config extractor
-    if let Err(e) = registry.register_config_extractor(
-        "TInvestClientConfig".to_string(),
-        extract_tinvest_config,
-    ) {
+    if let Err(e) = registry
+        .register_config_extractor("TInvestClientConfig".to_string(), extract_tinvest_config)
+    {
         return Err(to_pyruntime_err(format!(
             "Failed to register T-Invest config extractor: {e}"
         )));

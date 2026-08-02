@@ -65,7 +65,9 @@ fn make_data_callback(
             match putter {
                 Ok(putter) => {
                     let loop_ref = event_loop.bind(py);
-                    loop_ref.call_method1("call_soon_threadsafe", (putter, data)).map(|_| ())
+                    loop_ref
+                        .call_method1("call_soon_threadsafe", (putter, data))
+                        .map(|_| ())
                 }
                 Err(e) => Err(e),
             }
@@ -102,7 +104,10 @@ impl PyTInvestMarketDataStream {
         let grpc_client: TInvestGrpcClient = extract_grpc_client(&client)?;
         let event_loop_obj: Py<PyAny> = event_loop.clone().unbind();
         let (queue, _putter) = create_async_queue(event_loop.py(), &event_loop)?;
-        let on_data = make_data_callback(queue.clone_ref(event_loop.py()), event_loop_obj.clone_ref(event_loop.py()));
+        let on_data = make_data_callback(
+            queue.clone_ref(event_loop.py()),
+            event_loop_obj.clone_ref(event_loop.py()),
+        );
         let native = NativeMarketDataStream::new(grpc_client, on_data);
 
         Ok(Self {
@@ -119,9 +124,10 @@ impl PyTInvestMarketDataStream {
         subscription_type: String,
     ) -> PyResult<()> {
         let this = slf.borrow();
-        let inner = this.inner.as_ref().ok_or_else(|| {
-            PyRuntimeError::new_err("Stream already stopped")
-        })?;
+        let inner = this
+            .inner
+            .as_ref()
+            .ok_or_else(|| PyRuntimeError::new_err("Stream already stopped"))?;
 
         match subscription_type.as_str() {
             "trades" => inner.subscribe_trades(&instrument_ids),
@@ -146,9 +152,10 @@ impl PyTInvestMarketDataStream {
         subscription_type: String,
     ) -> PyResult<()> {
         let this = slf.borrow();
-        let inner = this.inner.as_ref().ok_or_else(|| {
-            PyRuntimeError::new_err("Stream already stopped")
-        })?;
+        let inner = this
+            .inner
+            .as_ref()
+            .ok_or_else(|| PyRuntimeError::new_err("Stream already stopped"))?;
 
         match subscription_type.as_str() {
             "trades" => inner.unsubscribe_trades(&instrument_ids),
@@ -163,7 +170,8 @@ impl PyTInvestMarketDataStream {
     }
 
     pub fn stop(slf: Bound<'_, Self>) -> PyResult<()> {
-        let mut this = slf.borrow_mut(); if let Some(native) = this.inner.take() {
+        let mut this = slf.borrow_mut();
+        if let Some(native) = this.inner.take() {
             native.stop();
             info!("PyTInvestMarketDataStream: stopped");
         }
@@ -217,11 +225,7 @@ impl PyTInvestOrderStateStream {
         })
     }
 
-    pub fn start(
-        slf: &Bound<'_, Self>,
-        client: Py<PyAny>,
-        accounts: Vec<String>,
-    ) -> PyResult<()> {
+    pub fn start(slf: &Bound<'_, Self>, client: Py<PyAny>, accounts: Vec<String>) -> PyResult<()> {
         let mut this = slf.borrow_mut();
         if this.inner.is_some() {
             return Err(PyRuntimeError::new_err("Stream already started"));
@@ -237,7 +241,8 @@ impl PyTInvestOrderStateStream {
     }
 
     pub fn stop(slf: Bound<'_, Self>) -> PyResult<()> {
-        let mut this = slf.borrow_mut(); if let Some(native) = this.inner.take() {
+        let mut this = slf.borrow_mut();
+        if let Some(native) = this.inner.take() {
             native.stop();
             info!("PyTInvestOrderStateStream: stopped");
         }
@@ -291,11 +296,7 @@ impl PyTInvestPortfolioStream {
         })
     }
 
-    pub fn start(
-        slf: &Bound<'_, Self>,
-        client: Py<PyAny>,
-        accounts: Vec<String>,
-    ) -> PyResult<()> {
+    pub fn start(slf: &Bound<'_, Self>, client: Py<PyAny>, accounts: Vec<String>) -> PyResult<()> {
         let mut this = slf.borrow_mut();
         if this.inner.is_some() {
             return Err(PyRuntimeError::new_err("Stream already started"));
@@ -311,7 +312,8 @@ impl PyTInvestPortfolioStream {
     }
 
     pub fn stop(slf: Bound<'_, Self>) -> PyResult<()> {
-        let mut this = slf.borrow_mut(); if let Some(native) = this.inner.take() {
+        let mut this = slf.borrow_mut();
+        if let Some(native) = this.inner.take() {
             native.stop();
             info!("PyTInvestPortfolioStream: stopped");
         }
@@ -365,11 +367,7 @@ impl PyTInvestPositionsStream {
         })
     }
 
-    pub fn start(
-        slf: &Bound<'_, Self>,
-        client: Py<PyAny>,
-        accounts: Vec<String>,
-    ) -> PyResult<()> {
+    pub fn start(slf: &Bound<'_, Self>, client: Py<PyAny>, accounts: Vec<String>) -> PyResult<()> {
         let mut this = slf.borrow_mut();
         if this.inner.is_some() {
             return Err(PyRuntimeError::new_err("Stream already started"));
@@ -385,7 +383,8 @@ impl PyTInvestPositionsStream {
     }
 
     pub fn stop(slf: Bound<'_, Self>) -> PyResult<()> {
-        let mut this = slf.borrow_mut(); if let Some(native) = this.inner.take() {
+        let mut this = slf.borrow_mut();
+        if let Some(native) = this.inner.take() {
             native.stop();
             info!("PyTInvestPositionsStream: stopped");
         }
@@ -412,9 +411,10 @@ impl Drop for PyTInvestPositionsStream {
 
 fn extract_grpc_client(client: &Py<PyAny>) -> PyResult<TInvestGrpcClient> {
     Python::attach(|py| {
-        let py_client: PyTInvestGrpcClient = client
-            .extract::<PyTInvestGrpcClient>(py)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to extract PyTInvestGrpcClient: {e}")))?;
+        let py_client: PyTInvestGrpcClient =
+            client.extract::<PyTInvestGrpcClient>(py).map_err(|e| {
+                PyRuntimeError::new_err(format!("Failed to extract PyTInvestGrpcClient: {e}"))
+            })?;
         Ok(py_client.inner.clone())
     })
 }

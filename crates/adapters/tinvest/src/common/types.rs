@@ -76,6 +76,5 @@ impl From<&crate::proto::MoneyValue> for MoneyValue {
 
 /// Convert proto Timestamp to chrono DateTime<Utc>.
 pub fn proto_timestamp_to_datetime(ts: &prost_types::Timestamp) -> DateTime<Utc> {
-    DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
-        .unwrap_or(DateTime::UNIX_EPOCH)
+    DateTime::from_timestamp(ts.seconds, ts.nanos as u32).unwrap_or(DateTime::UNIX_EPOCH)
 }

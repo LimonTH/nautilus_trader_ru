@@ -19,9 +19,9 @@
 //! [`tokio::runtime::Runtime`] and delivers converted data through a
 //! Python-aware callback that acquires the GIL.
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -33,12 +33,11 @@ use tracing::{error, info, warn};
 
 use crate::client::TInvestGrpcClient;
 use crate::proto::{
-    market_data_request, MarketDataRequest, MarketDataResponse,
-    OrderBookInstrument, OrderStateStreamRequest, OrderStateStreamResponse,
-    PortfolioStreamRequest, PortfolioStreamResponse,
-    PositionsStreamRequest, PositionsStreamResponse,
-    SubscribeInfoRequest, SubscribeOrderBookRequest, SubscribeTradesRequest,
-    SubscriptionAction, TradeInstrument,
+    MarketDataRequest, MarketDataResponse, OrderBookInstrument, OrderStateStreamRequest,
+    OrderStateStreamResponse, PortfolioStreamRequest, PortfolioStreamResponse,
+    PositionsStreamRequest, PositionsStreamResponse, SubscribeInfoRequest,
+    SubscribeOrderBookRequest, SubscribeTradesRequest, SubscriptionAction, TradeInstrument,
+    market_data_request,
 };
 
 // -------------------------------------------------------------------------------------------
@@ -208,7 +207,10 @@ fn order_state_stream_response_to_dict<'py>(
             crate::proto::order_state_stream_response::Payload::OrderState(order_state) => {
                 d.set_item("payload_type", "order_state")?;
                 d.set_item("order_id", &order_state.order_id)?;
-                d.set_item("execution_report_status", order_state.execution_report_status)?;
+                d.set_item(
+                    "execution_report_status",
+                    order_state.execution_report_status,
+                )?;
                 d.set_item("ticker", &order_state.ticker)?;
                 d.set_item("class_code", &order_state.class_code)?;
                 d.set_item("direction", order_state.direction)?;
@@ -234,7 +236,10 @@ fn order_state_stream_response_to_dict<'py>(
                     d.set_item("amount", money_value_to_dict(py, amount)?)?;
                 }
                 if let Some(ref executed_order_price) = order_state.executed_order_price {
-                    d.set_item("executed_order_price", money_value_to_dict(py, executed_order_price)?)?;
+                    d.set_item(
+                        "executed_order_price",
+                        money_value_to_dict(py, executed_order_price)?,
+                    )?;
                 }
             }
             crate::proto::order_state_stream_response::Payload::StopOrderState(stop_order) => {
@@ -651,7 +656,7 @@ impl NativeMarketDataStream {
         self.is_active.store(false, Ordering::SeqCst);
         if let Some(handle) = self.thread_handle.take() {
             info!("NativeMarketDataStream: waiting for background thread to finish...");
-            
+
             let _ = handle.join();
             info!("NativeMarketDataStream: background thread joined");
         }

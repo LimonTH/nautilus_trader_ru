@@ -125,7 +125,11 @@ fn order_state_to_dict<'a>(
         sd.set_item("trade_id", &stage.trade_id)?;
         sd.set_item(
             "execution_time",
-            stage.execution_time.as_ref().map(|t| t.seconds).unwrap_or(0),
+            stage
+                .execution_time
+                .as_ref()
+                .map(|t| t.seconds)
+                .unwrap_or(0),
         )?;
         stages_list.append(sd)?;
     }
@@ -195,10 +199,7 @@ fn instrument_short_to_dict<'a>(
 // Helper: convert a Share/Bond/Future/Etf/Currency proto to a generic Python dict
 // ---------------------------------------------------------------------------
 
-fn share_to_dict<'a>(
-    py: Python<'a>,
-    s: &'a proto::Share,
-) -> PyResult<Bound<'a, PyDict>> {
+fn share_to_dict<'a>(py: Python<'a>, s: &'a proto::Share) -> PyResult<Bound<'a, PyDict>> {
     let d = PyDict::new(py);
     d.set_item("figi", &s.figi)?;
     d.set_item("ticker", &s.ticker)?;
@@ -213,10 +214,7 @@ fn share_to_dict<'a>(
     Ok(d)
 }
 
-fn bond_to_dict<'a>(
-    py: Python<'a>,
-    b: &'a proto::Bond,
-) -> PyResult<Bound<'a, PyDict>> {
+fn bond_to_dict<'a>(py: Python<'a>, b: &'a proto::Bond) -> PyResult<Bound<'a, PyDict>> {
     let d = PyDict::new(py);
     d.set_item("figi", &b.figi)?;
     d.set_item("ticker", &b.ticker)?;
@@ -231,10 +229,7 @@ fn bond_to_dict<'a>(
     Ok(d)
 }
 
-fn future_to_dict<'a>(
-    py: Python<'a>,
-    f: &'a proto::Future,
-) -> PyResult<Bound<'a, PyDict>> {
+fn future_to_dict<'a>(py: Python<'a>, f: &'a proto::Future) -> PyResult<Bound<'a, PyDict>> {
     let d = PyDict::new(py);
     d.set_item("figi", &f.figi)?;
     d.set_item("ticker", &f.ticker)?;
@@ -248,10 +243,7 @@ fn future_to_dict<'a>(
     Ok(d)
 }
 
-fn etf_to_dict<'a>(
-    py: Python<'a>,
-    e: &'a proto::Etf,
-) -> PyResult<Bound<'a, PyDict>> {
+fn etf_to_dict<'a>(py: Python<'a>, e: &'a proto::Etf) -> PyResult<Bound<'a, PyDict>> {
     let d = PyDict::new(py);
     d.set_item("figi", &e.figi)?;
     d.set_item("ticker", &e.ticker)?;
@@ -266,10 +258,7 @@ fn etf_to_dict<'a>(
     Ok(d)
 }
 
-fn currency_to_dict<'a>(
-    py: Python<'a>,
-    c: &'a proto::Currency,
-) -> PyResult<Bound<'a, PyDict>> {
+fn currency_to_dict<'a>(py: Python<'a>, c: &'a proto::Currency) -> PyResult<Bound<'a, PyDict>> {
     let d = PyDict::new(py);
     d.set_item("figi", &c.figi)?;
     d.set_item("ticker", &c.ticker)?;
@@ -284,10 +273,7 @@ fn currency_to_dict<'a>(
     Ok(d)
 }
 
-fn option_to_dict<'a>(
-    py: Python<'a>,
-    o: &'a proto::Option,
-) -> PyResult<Bound<'a, PyDict>> {
+fn option_to_dict<'a>(py: Python<'a>, o: &'a proto::Option) -> PyResult<Bound<'a, PyDict>> {
     let d = PyDict::new(py);
     d.set_item("figi", &o.uid)?; // Options use uid as primary identifier
     d.set_item("ticker", &o.ticker)?;
@@ -397,8 +383,8 @@ impl PyTInvestGrpcClient {
 
     #[new]
     pub fn py_new(config: TInvestClientConfig) -> PyResult<Self> {
-        let inner = TInvestGrpcClient::new(config)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let inner =
+            TInvestGrpcClient::new(config).map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Self { inner })
     }
 
@@ -430,15 +416,13 @@ impl PyTInvestGrpcClient {
     // -----------------------------------------------------------------------
 
     /// Load all instruments from T-Invest: shares, bonds, futures, ETFs, currencies.
-    pub fn request_instruments<'py>(
-        &mut self,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    pub fn request_instruments<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut instruments_stub = inner.instruments().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("instruments service: {e}"))
-            })?;
+            let mut instruments_stub = inner
+                .instruments()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("instruments service: {e}")))?;
             let request = proto::InstrumentsRequest {
                 instrument_status: Some(1), // INSTRUMENT_STATUS_BASE
                 instrument_exchange: None,
@@ -666,9 +650,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.instruments().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("instruments service: {e}"))
-            })?;
+            let mut stub = inner
+                .instruments()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("instruments service: {e}")))?;
             let instrument_request = proto::InstrumentRequest {
                 id_type: 0, // INSTRUMENT_ID_UNSPECIFIED — auto-detect
                 class_code: None,
@@ -771,9 +756,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut md = inner.market_data().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("market_data service: {e}"))
-            })?;
+            let mut md = inner
+                .market_data()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("market_data service: {e}")))?;
             let request = proto::GetCandlesRequest {
                 instrument_id: Some(figi.clone()),
                 interval,
@@ -789,9 +775,10 @@ impl PyTInvestGrpcClient {
                 ..Default::default()
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = md.get_candles(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_candles: {e}"))
-            })?;
+            let response = md
+                .get_candles(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_candles: {e}")))?;
             let candles = response.into_inner().candles;
 
             Python::attach(|py| {
@@ -827,10 +814,7 @@ impl PyTInvestGrpcClient {
                             .transpose()?,
                     )?;
                     d.set_item("volume", c.volume)?;
-                    d.set_item(
-                        "time",
-                        c.time.as_ref().map(|t| t.seconds).unwrap_or(0),
-                    )?;
+                    d.set_item("time", c.time.as_ref().map(|t| t.seconds).unwrap_or(0))?;
                     d.set_item("is_complete", c.is_complete)?;
                     py_list.append(d)?;
                 }
@@ -849,18 +833,20 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut md = inner.market_data().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("market_data service: {e}"))
-            })?;
+            let mut md = inner
+                .market_data()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("market_data service: {e}")))?;
             let request = proto::GetOrderBookRequest {
                 instrument_id: Some(figi.clone()),
                 depth,
                 ..Default::default()
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = md.get_order_book(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_order_book: {e}"))
-            })?;
+            let response = md
+                .get_order_book(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_order_book: {e}")))?;
             let book = response.into_inner();
 
             Python::attach(|py| {
@@ -943,9 +929,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut md = inner.market_data().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("market_data service: {e}"))
-            })?;
+            let mut md = inner
+                .market_data()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("market_data service: {e}")))?;
             let request = proto::GetLastTradesRequest {
                 instrument_id: Some(figi.clone()),
                 from: Some(prost_types::Timestamp {
@@ -959,9 +946,10 @@ impl PyTInvestGrpcClient {
                 ..Default::default()
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = md.get_last_trades(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_last_trades: {e}"))
-            })?;
+            let response = md
+                .get_last_trades(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_last_trades: {e}")))?;
             let trades = response.into_inner().trades;
 
             Python::attach(|py| {
@@ -986,10 +974,7 @@ impl PyTInvestGrpcClient {
                             .transpose()?,
                     )?;
                     d.set_item("quantity", t.quantity)?;
-                    d.set_item(
-                        "time",
-                        t.time.as_ref().map(|ts| ts.seconds).unwrap_or(0),
-                    )?;
+                    d.set_item("time", t.time.as_ref().map(|ts| ts.seconds).unwrap_or(0))?;
                     py_list.append(d)?;
                 }
                 Ok(py_list.into_any().unbind())
@@ -1012,9 +997,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut md = inner.market_data().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("market_data service: {e}"))
-            })?;
+            let mut md = inner
+                .market_data()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("market_data service: {e}")))?;
             let request = proto::GetTechAnalysisRequest {
                 indicator_type,
                 instrument_uid: instrument_uid.clone(),
@@ -1033,9 +1019,10 @@ impl PyTInvestGrpcClient {
                 smoothing: None,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = md.get_tech_analysis(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_tech_analysis: {e}"))
-            })?;
+            let response = md
+                .get_tech_analysis(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_tech_analysis: {e}")))?;
             let indicators = response.into_inner().technical_indicators;
 
             Python::attach(|py| {
@@ -1089,22 +1076,21 @@ impl PyTInvestGrpcClient {
     }
 
     /// Get all accounts for the current token.
-    pub fn get_accounts<'py>(
-        &mut self,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    pub fn get_accounts<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut users = inner.users().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("users service: {e}"))
-            })?;
+            let mut users = inner
+                .users()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("users service: {e}")))?;
             let request = proto::GetAccountsRequest {
                 status: Some(4), // AccountStatus::All
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = users.get_accounts(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_accounts: {e}"))
-            })?;
+            let response = users
+                .get_accounts(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_accounts: {e}")))?;
             let accounts = response.into_inner().accounts;
 
             Python::attach(|py| {
@@ -1151,9 +1137,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut orders = inner.orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("orders service: {e}"))
-            })?;
+            let mut orders = inner
+                .orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("orders service: {e}")))?;
             let price_quotation = price.map(|p| {
                 let units = p.trunc() as i64;
                 let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
@@ -1173,9 +1160,10 @@ impl PyTInvestGrpcClient {
                 confirm_margin_trade: false,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = orders.post_order(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("post_order: {e}"))
-            })?;
+            let response = orders
+                .post_order(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("post_order: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -1263,9 +1251,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut orders = inner.orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("orders service: {e}"))
-            })?;
+            let mut orders = inner
+                .orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("orders service: {e}")))?;
             let price_quotation = price.map(|p| {
                 let units = p.trunc() as i64;
                 let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
@@ -1284,9 +1273,10 @@ impl PyTInvestGrpcClient {
                 confirm_margin_trade: false,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = orders.post_order_async(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("post_order_async: {e}"))
-            })?;
+            let response = orders
+                .post_order_async(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("post_order_async: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -1309,26 +1299,25 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut orders = inner.orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("orders service: {e}"))
-            })?;
+            let mut orders = inner
+                .orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("orders service: {e}")))?;
             let request = proto::CancelOrderRequest {
                 account_id: account_id.clone(),
                 order_id: order_id.clone(),
                 order_id_type: Some(1), // ORDER_ID_TYPE_EXCHANGE
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = orders.cancel_order(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("cancel_order: {e}"))
-            })?;
+            let response = orders
+                .cancel_order(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("cancel_order: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
                 let d = PyDict::new(py);
-                d.set_item(
-                    "time",
-                    resp.time.as_ref().map(|t| t.seconds).unwrap_or(0),
-                )?;
+                d.set_item("time", resp.time.as_ref().map(|t| t.seconds).unwrap_or(0))?;
                 d.set_item(
                     "server_time",
                     resp.response_metadata
@@ -1356,9 +1345,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut orders = inner.orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("orders service: {e}"))
-            })?;
+            let mut orders = inner
+                .orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("orders service: {e}")))?;
             let price_quotation = price.map(|p| {
                 let units = p.trunc() as i64;
                 let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
@@ -1375,9 +1365,10 @@ impl PyTInvestGrpcClient {
                 confirm_margin_trade: false,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = orders.replace_order(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("replace_order: {e}"))
-            })?;
+            let response = orders
+                .replace_order(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("replace_order: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -1455,9 +1446,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut orders = inner.orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("orders service: {e}"))
-            })?;
+            let mut orders = inner
+                .orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("orders service: {e}")))?;
             let request = proto::GetOrderStateRequest {
                 account_id: account_id.clone(),
                 order_id: order_id.clone(),
@@ -1465,9 +1457,10 @@ impl PyTInvestGrpcClient {
                 order_id_type: Some(1), // ORDER_ID_TYPE_EXCHANGE
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = orders.get_order_state(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_order_state: {e}"))
-            })?;
+            let response = orders
+                .get_order_state(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_order_state: {e}")))?;
             let order_state = response.into_inner();
 
             Python::attach(|py| {
@@ -1486,17 +1479,19 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut orders = inner.orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("orders service: {e}"))
-            })?;
+            let mut orders = inner
+                .orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("orders service: {e}")))?;
             let request = proto::GetOrdersRequest {
                 account_id: account_id.clone(),
                 advanced_filters: None,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = orders.get_orders(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_orders: {e}"))
-            })?;
+            let response = orders
+                .get_orders(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_orders: {e}")))?;
             let orders_list = response.into_inner().orders;
 
             Python::attach(|py| {
@@ -1533,9 +1528,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.stop_orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("stop_orders service: {e}"))
-            })?;
+            let mut stub = inner
+                .stop_orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("stop_orders service: {e}")))?;
 
             let price_value = price.map(|p| {
                 let units = p.trunc() as i64;
@@ -1571,9 +1567,10 @@ impl PyTInvestGrpcClient {
             };
 
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.post_stop_order(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("post_stop_order: {e}"))
-            })?;
+            let response = stub
+                .post_stop_order(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("post_stop_order: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -1603,9 +1600,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.stop_orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("stop_orders service: {e}"))
-            })?;
+            let mut stub = inner
+                .stop_orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("stop_orders service: {e}")))?;
 
             let request = proto::CancelStopOrderRequest {
                 account_id: account_id.clone(),
@@ -1613,17 +1611,15 @@ impl PyTInvestGrpcClient {
             };
 
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.cancel_stop_order(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("cancel_stop_order: {e}"))
-            })?;
+            let response = stub
+                .cancel_stop_order(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("cancel_stop_order: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
                 let d = PyDict::new(py);
-                d.set_item(
-                    "time",
-                    resp.time.as_ref().map(|t| t.seconds).unwrap_or(0),
-                )?;
+                d.set_item("time", resp.time.as_ref().map(|t| t.seconds).unwrap_or(0))?;
                 Ok(d.into_any().unbind())
             })
         })
@@ -1653,9 +1649,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.stop_orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("stop_orders service: {e}"))
-            })?;
+            let mut stub = inner
+                .stop_orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("stop_orders service: {e}")))?;
 
             // 1. Cancel the existing stop-order
             let cancel_request = proto::CancelStopOrderRequest {
@@ -1663,9 +1660,9 @@ impl PyTInvestGrpcClient {
                 stop_order_id: stop_order_id.clone(),
             };
             let cancel_req = inner.with_auth(tonic::Request::new(cancel_request));
-            stub.cancel_stop_order(cancel_req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("replace_stop_order cancel: {e}"))
-            })?;
+            stub.cancel_stop_order(cancel_req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("replace_stop_order cancel: {e}")))?;
 
             // 2. Post the replacement stop-order
             let price_value = price.map(|p| {
@@ -1700,9 +1697,10 @@ impl PyTInvestGrpcClient {
                 instant_execution: None,
             };
             let post_req = inner.with_auth(tonic::Request::new(post_request));
-            let response = stub.post_stop_order(post_req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("replace_stop_order post: {e}"))
-            })?;
+            let response = stub
+                .post_stop_order(post_req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("replace_stop_order post: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -1732,9 +1730,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.stop_orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("stop_orders service: {e}"))
-            })?;
+            let mut stub = inner
+                .stop_orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("stop_orders service: {e}")))?;
 
             let request = proto::GetStopOrdersRequest {
                 account_id: account_id.clone(),
@@ -1744,9 +1743,10 @@ impl PyTInvestGrpcClient {
             };
 
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.get_stop_orders(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_stop_orders: {e}"))
-            })?;
+            let response = stub
+                .get_stop_orders(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_stop_orders: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -1765,23 +1765,33 @@ impl PyTInvestGrpcClient {
                     )?;
                     d.set_item(
                         "activation_date_time",
-                        order.activation_date_time.as_ref().map(|t| t.seconds).unwrap_or(0),
+                        order
+                            .activation_date_time
+                            .as_ref()
+                            .map(|t| t.seconds)
+                            .unwrap_or(0),
                     )?;
                     d.set_item(
                         "expiration_time",
-                        order.expiration_time.as_ref().map(|t| t.seconds).unwrap_or(0),
+                        order
+                            .expiration_time
+                            .as_ref()
+                            .map(|t| t.seconds)
+                            .unwrap_or(0),
                     )?;
                     // price and stop_price are MoneyValue in StopOrder
                     d.set_item(
                         "price",
-                        order.price
+                        order
+                            .price
                             .as_ref()
                             .map(|mv| money_value_to_dict(py, mv))
                             .transpose()?,
                     )?;
                     d.set_item(
                         "stop_price",
-                        order.stop_price
+                        order
+                            .stop_price
                             .as_ref()
                             .map(|mv| money_value_to_dict(py, mv))
                             .transpose()?,
@@ -1817,18 +1827,18 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
 
-            let request = proto::OpenSandboxAccountRequest {
-                name,
-            };
+            let request = proto::OpenSandboxAccountRequest { name };
 
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.open_sandbox_account(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("open_sandbox_account: {e}"))
-            })?;
+            let response = stub
+                .open_sandbox_account(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("open_sandbox_account: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -1848,18 +1858,20 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
 
             let request = proto::CloseSandboxAccountRequest {
                 account_id: account_id.clone(),
             };
 
             let req = inner.with_auth(tonic::Request::new(request));
-            let _ = stub.close_sandbox_account(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("close_sandbox_account: {e}"))
-            })?;
+            let _ = stub
+                .close_sandbox_account(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("close_sandbox_account: {e}")))?;
 
             Python::attach(|py| {
                 let d = PyDict::new(py);
@@ -1892,9 +1904,10 @@ impl PyTInvestGrpcClient {
 
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
 
             let request = proto::SandboxPayInRequest {
                 account_id: account_id.clone(),
@@ -1905,7 +1918,8 @@ impl PyTInvestGrpcClient {
                 }),
             };
 
-            let _ = stub.sandbox_pay_in(inner.with_auth(tonic::Request::new(request)))
+            let _ = stub
+                .sandbox_pay_in(inner.with_auth(tonic::Request::new(request)))
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("sandbox_pay_in: {e}")))?;
 
@@ -1930,17 +1944,19 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut ops = inner.operations().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("operations service: {e}"))
-            })?;
+            let mut ops = inner
+                .operations()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("operations service: {e}")))?;
             let request = proto::PortfolioRequest {
                 account_id: account_id.clone(),
                 currency: None,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = ops.get_portfolio(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_portfolio: {e}"))
-            })?;
+            let response = ops
+                .get_portfolio(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_portfolio: {e}")))?;
             let portfolio = response.into_inner();
 
             Python::attach(|py| {
@@ -2092,22 +2108,27 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut ops = inner.operations().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("operations service: {e}"))
-            })?;
+            let mut ops = inner
+                .operations()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("operations service: {e}")))?;
             let request = proto::PositionsRequest {
                 account_id: account_id.clone(),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = ops.get_positions(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_positions: {e}"))
-            })?;
+            let response = ops
+                .get_positions(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_positions: {e}")))?;
             let positions = response.into_inner();
 
             Python::attach(|py| {
                 let d = PyDict::new(py);
                 d.set_item("account_id", &positions.account_id)?;
-                d.set_item("limits_loading_in_progress", positions.limits_loading_in_progress)?;
+                d.set_item(
+                    "limits_loading_in_progress",
+                    positions.limits_loading_in_progress,
+                )?;
 
                 // money (not currencies!)
                 let money_list = PyList::new(py, &[] as &[Py<PyAny>])?;
@@ -2186,9 +2207,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut ops = inner.operations().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("operations service: {e}"))
-            })?;
+            let mut ops = inner
+                .operations()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("operations service: {e}")))?;
             let request = proto::GetOperationsByCursorRequest {
                 account_id: account_id.clone(),
                 instrument_id: figi.clone(),
@@ -2209,9 +2231,10 @@ impl PyTInvestGrpcClient {
                 without_overnights: Some(true),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = ops.get_operations_by_cursor(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_operations_by_cursor: {e}"))
-            })?;
+            let response = ops
+                .get_operations_by_cursor(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_operations_by_cursor: {e}")))?;
             let operations_response = response.into_inner();
 
             Python::attach(|py| {
@@ -2251,10 +2274,7 @@ impl PyTInvestGrpcClient {
                     idict.set_item("quantity_rest", item.quantity_rest)?;
                     idict.set_item("figi", &item.figi)?;
                     idict.set_item("instrument_type", &item.instrument_type)?;
-                    idict.set_item(
-                        "date",
-                        item.date.as_ref().map(|t| t.seconds).unwrap_or(0),
-                    )?;
+                    idict.set_item("date", item.date.as_ref().map(|t| t.seconds).unwrap_or(0))?;
                     // r#type (not operation_type!)
                     idict.set_item("type", item.r#type)?;
                     // operation_type as string from OperationType enum
@@ -2286,9 +2306,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut ops = inner.operations().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("operations service: {e}"))
-            })?;
+            let mut ops = inner
+                .operations()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("operations service: {e}")))?;
             let request = proto::GetOperationsByCursorRequest {
                 account_id: account_id.clone(),
                 instrument_id,
@@ -2309,9 +2330,10 @@ impl PyTInvestGrpcClient {
                 without_overnights: Some(without_overnights),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = ops.get_operations_by_cursor(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_operations_by_cursor: {e}"))
-            })?;
+            let response = ops
+                .get_operations_by_cursor(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_operations_by_cursor: {e}")))?;
             let operations_response = response.into_inner();
 
             Python::attach(|py| {
@@ -2350,10 +2372,7 @@ impl PyTInvestGrpcClient {
                     idict.set_item("quantity_rest", item.quantity_rest)?;
                     idict.set_item("figi", &item.figi)?;
                     idict.set_item("instrument_type", &item.instrument_type)?;
-                    idict.set_item(
-                        "date",
-                        item.date.as_ref().map(|t| t.seconds).unwrap_or(0),
-                    )?;
+                    idict.set_item("date", item.date.as_ref().map(|t| t.seconds).unwrap_or(0))?;
                     idict.set_item("type", item.r#type)?;
                     idict.set_item("operation_type", operation_type_to_str(item.r#type))?;
                     items_list.append(idict)?;
@@ -2373,16 +2392,18 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut ops = inner.operations().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("operations service: {e}"))
-            })?;
+            let mut ops = inner
+                .operations()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("operations service: {e}")))?;
             let request = proto::WithdrawLimitsRequest {
                 account_id: account_id.clone(),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = ops.get_withdraw_limits(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_withdraw_limits: {e}"))
-            })?;
+            let response = ops
+                .get_withdraw_limits(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_withdraw_limits: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -2411,14 +2432,16 @@ impl PyTInvestGrpcClient {
     pub fn get_user_tariff<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut users = inner.users().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("users service: {e}"))
-            })?;
+            let mut users = inner
+                .users()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("users service: {e}")))?;
             let request = proto::GetUserTariffRequest {};
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = users.get_user_tariff(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_user_tariff: {e}"))
-            })?;
+            let response = users
+                .get_user_tariff(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_user_tariff: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -2470,9 +2493,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut orders = inner.orders().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("orders service: {e}"))
-            })?;
+            let mut orders = inner
+                .orders()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("orders service: {e}")))?;
             let price_quotation = {
                 let units = price.trunc() as i64;
                 let nano = ((price.fract() * 1_000_000_000.0).round()) as i32;
@@ -2486,9 +2510,10 @@ impl PyTInvestGrpcClient {
                 quantity,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = orders.get_order_price(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_order_price: {e}"))
-            })?;
+            let response = orders
+                .get_order_price(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_order_price: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -2545,18 +2570,20 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut instruments = inner.instruments().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("instruments service: {e}"))
-            })?;
+            let mut instruments = inner
+                .instruments()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("instruments service: {e}")))?;
             let request = proto::InstrumentRequest {
                 id_type,
                 class_code,
                 id: id.clone(),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = instruments.get_instrument_by(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_instrument_by: {e}"))
-            })?;
+            let response = instruments
+                .get_instrument_by(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_instrument_by: {e}")))?;
             let instrument = response.into_inner().instrument;
 
             Python::attach(|py| {
@@ -2580,9 +2607,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut instruments = inner.instruments().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("instruments service: {e}"))
-            })?;
+            let mut instruments = inner
+                .instruments()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("instruments service: {e}")))?;
             let request = proto::TradingSchedulesRequest {
                 exchange,
                 from: from_ts.map(|ts| prost_types::Timestamp {
@@ -2595,9 +2623,10 @@ impl PyTInvestGrpcClient {
                 }),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = instruments.trading_schedules(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("trading_schedules: {e}"))
-            })?;
+            let response = instruments
+                .trading_schedules(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("trading_schedules: {e}")))?;
             let exchanges = response.into_inner().exchanges;
 
             Python::attach(|py| {
@@ -2608,10 +2637,7 @@ impl PyTInvestGrpcClient {
                     let days_list = PyList::new(py, &[] as &[Py<PyAny>])?;
                     for day in &ex.days {
                         let dd = PyDict::new(py);
-                        dd.set_item(
-                            "date",
-                            day.date.as_ref().map(|t| t.seconds).unwrap_or(0),
-                        )?;
+                        dd.set_item("date", day.date.as_ref().map(|t| t.seconds).unwrap_or(0))?;
                         dd.set_item("is_trading_day", day.is_trading_day)?;
                         dd.set_item(
                             "start_time",
@@ -2640,16 +2666,18 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut md = inner.market_data().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("market_data service: {e}"))
-            })?;
+            let mut md = inner
+                .market_data()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("market_data service: {e}")))?;
             let request = proto::GetTradingStatusesRequest {
                 instrument_id: instrument_ids,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = md.get_trading_statuses(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_trading_statuses: {e}"))
-            })?;
+            let response = md
+                .get_trading_statuses(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_trading_statuses: {e}")))?;
             let statuses = response.into_inner().trading_statuses;
 
             Python::attach(|py| {
@@ -2659,9 +2687,15 @@ impl PyTInvestGrpcClient {
                     d.set_item("figi", &st.figi)?;
                     d.set_item("trading_status", st.trading_status)?;
                     d.set_item("limit_order_available_flag", st.limit_order_available_flag)?;
-                    d.set_item("market_order_available_flag", st.market_order_available_flag)?;
+                    d.set_item(
+                        "market_order_available_flag",
+                        st.market_order_available_flag,
+                    )?;
                     d.set_item("api_trade_available_flag", st.api_trade_available_flag)?;
-                    d.set_item("bestprice_order_available_flag", st.bestprice_order_available_flag)?;
+                    d.set_item(
+                        "bestprice_order_available_flag",
+                        st.bestprice_order_available_flag,
+                    )?;
                     d.set_item("only_best_price", st.only_best_price)?;
                     d.set_item("ticker", &st.ticker)?;
                     d.set_item("class_code", &st.class_code)?;
@@ -2683,9 +2717,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut instruments = inner.instruments().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("instruments service: {e}"))
-            })?;
+            let mut instruments = inner
+                .instruments()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("instruments service: {e}")))?;
             #[allow(deprecated)]
             let request = proto::GetAccruedInterestsRequest {
                 figi: String::new(), // deprecated
@@ -2700,9 +2735,10 @@ impl PyTInvestGrpcClient {
                 instrument_id: instrument_id.clone(),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = instruments.get_accrued_interests(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_accrued_interests: {e}"))
-            })?;
+            let response = instruments
+                .get_accrued_interests(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_accrued_interests: {e}")))?;
             let interests = response.into_inner().accrued_interests;
 
             Python::attach(|py| {
@@ -2712,15 +2748,24 @@ impl PyTInvestGrpcClient {
                     d.set_item("date", a.date.as_ref().map(|t| t.seconds).unwrap_or(0))?;
                     d.set_item(
                         "value",
-                        a.value.as_ref().map(|q| quotation_to_dict(py, q)).transpose()?,
+                        a.value
+                            .as_ref()
+                            .map(|q| quotation_to_dict(py, q))
+                            .transpose()?,
                     )?;
                     d.set_item(
                         "value_percent",
-                        a.value_percent.as_ref().map(|q| quotation_to_dict(py, q)).transpose()?,
+                        a.value_percent
+                            .as_ref()
+                            .map(|q| quotation_to_dict(py, q))
+                            .transpose()?,
                     )?;
                     d.set_item(
                         "nominal",
-                        a.nominal.as_ref().map(|q| quotation_to_dict(py, q)).transpose()?,
+                        a.nominal
+                            .as_ref()
+                            .map(|q| quotation_to_dict(py, q))
+                            .transpose()?,
                     )?;
                     py_list.append(d)?;
                 }
@@ -2737,14 +2782,16 @@ impl PyTInvestGrpcClient {
     pub fn get_sandbox_accounts<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let request = proto::GetAccountsRequest { status: Some(4) };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.get_sandbox_accounts(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_sandbox_accounts: {e}"))
-            })?;
+            let response = stub
+                .get_sandbox_accounts(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_sandbox_accounts: {e}")))?;
             let accounts = response.into_inner().accounts;
 
             Python::attach(|py| {
@@ -2777,9 +2824,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let price_quotation = price.map(|p| {
                 let units = p.trunc() as i64;
                 let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
@@ -2798,9 +2846,10 @@ impl PyTInvestGrpcClient {
                 confirm_margin_trade: false,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.post_sandbox_order_async(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("post_sandbox_order_async: {e}"))
-            })?;
+            let response = stub
+                .post_sandbox_order_async(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("post_sandbox_order_async: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -2826,9 +2875,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let price_quotation = price.map(|p| {
                 let units = p.trunc() as i64;
                 let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
@@ -2845,9 +2895,10 @@ impl PyTInvestGrpcClient {
                 confirm_margin_trade: false,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.replace_sandbox_order(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("replace_sandbox_order: {e}"))
-            })?;
+            let response = stub
+                .replace_sandbox_order(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("replace_sandbox_order: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -2874,26 +2925,25 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let request = proto::CancelOrderRequest {
                 account_id: account_id.clone(),
                 order_id: order_id.clone(),
                 order_id_type: Some(1),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.cancel_sandbox_order(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("cancel_sandbox_order: {e}"))
-            })?;
+            let response = stub
+                .cancel_sandbox_order(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("cancel_sandbox_order: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
                 let d = PyDict::new(py);
-                d.set_item(
-                    "time",
-                    resp.time.as_ref().map(|t| t.seconds).unwrap_or(0),
-                )?;
+                d.set_item("time", resp.time.as_ref().map(|t| t.seconds).unwrap_or(0))?;
                 Ok(d.into_any().unbind())
             })
         })
@@ -2908,17 +2958,19 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let request = proto::GetOrdersRequest {
                 account_id: account_id.clone(),
                 advanced_filters: None,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.get_sandbox_orders(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_sandbox_orders: {e}"))
-            })?;
+            let response = stub
+                .get_sandbox_orders(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_sandbox_orders: {e}")))?;
             let orders = response.into_inner().orders;
 
             Python::attach(|py| {
@@ -2942,9 +2994,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let request = proto::GetOrderStateRequest {
                 account_id: account_id.clone(),
                 order_id: order_id.clone(),
@@ -2952,9 +3005,10 @@ impl PyTInvestGrpcClient {
                 order_id_type: Some(1),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.get_sandbox_order_state(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_sandbox_order_state: {e}"))
-            })?;
+            let response = stub
+                .get_sandbox_order_state(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_sandbox_order_state: {e}")))?;
             let order_state = response.into_inner();
 
             Python::attach(|py| {
@@ -2977,9 +3031,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let price_quotation = {
                 let units = price.trunc() as i64;
                 let nano = ((price.fract() * 1_000_000_000.0).round()) as i32;
@@ -2993,9 +3048,10 @@ impl PyTInvestGrpcClient {
                 quantity,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.get_sandbox_order_price(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_sandbox_order_price: {e}"))
-            })?;
+            let response = stub
+                .get_sandbox_order_price(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_sandbox_order_price: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -3039,9 +3095,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let request = proto::GetOperationsByCursorRequest {
                 account_id: account_id.clone(),
                 instrument_id,
@@ -3062,9 +3119,12 @@ impl PyTInvestGrpcClient {
                 without_overnights: Some(without_overnights),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.get_sandbox_operations_by_cursor(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_sandbox_operations_by_cursor: {e}"))
-            })?;
+            let response = stub
+                .get_sandbox_operations_by_cursor(req)
+                .await
+                .map_err(|e| {
+                    PyRuntimeError::new_err(format!("get_sandbox_operations_by_cursor: {e}"))
+                })?;
             let operations_response = response.into_inner();
 
             Python::attach(|py| {
@@ -3076,10 +3136,20 @@ impl PyTInvestGrpcClient {
                     let idict = PyDict::new(py);
                     idict.set_item("id", &item.id)?;
                     idict.set_item("figi", &item.figi)?;
-                    idict.set_item("payment",
-                        item.payment.as_ref().map(|mv| money_value_to_dict(py, mv)).transpose()?)?;
-                    idict.set_item("price",
-                        item.price.as_ref().map(|mv| money_value_to_dict(py, mv)).transpose()?)?;
+                    idict.set_item(
+                        "payment",
+                        item.payment
+                            .as_ref()
+                            .map(|mv| money_value_to_dict(py, mv))
+                            .transpose()?,
+                    )?;
+                    idict.set_item(
+                        "price",
+                        item.price
+                            .as_ref()
+                            .map(|mv| money_value_to_dict(py, mv))
+                            .transpose()?,
+                    )?;
                     idict.set_item("quantity", item.quantity)?;
                     idict.set_item("date", item.date.as_ref().map(|t| t.seconds).unwrap_or(0))?;
                     idict.set_item("type", item.r#type)?;
@@ -3101,9 +3171,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let request = proto::WithdrawLimitsRequest {
                 account_id: account_id.clone(),
             };
@@ -3141,9 +3212,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let price_quotation = price.map(|p| {
                 let units = p.trunc() as i64;
                 let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
@@ -3155,16 +3227,23 @@ impl PyTInvestGrpcClient {
                 price: price_quotation,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.get_sandbox_max_lots(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_sandbox_max_lots: {e}"))
-            })?;
+            let response = stub
+                .get_sandbox_max_lots(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_sandbox_max_lots: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
                 let d = PyDict::new(py);
                 d.set_item("currency", &resp.currency)?;
-                d.set_item("buy_max_lots", resp.buy_limits.map(|l| l.buy_max_lots).unwrap_or(0))?;
-                d.set_item("sell_max_lots", resp.sell_limits.map(|l| l.sell_max_lots).unwrap_or(0))?;
+                d.set_item(
+                    "buy_max_lots",
+                    resp.buy_limits.map(|l| l.buy_max_lots).unwrap_or(0),
+                )?;
+                d.set_item(
+                    "sell_max_lots",
+                    resp.sell_limits.map(|l| l.sell_max_lots).unwrap_or(0),
+                )?;
                 Ok(d.into_any().unbind())
             })
         })
@@ -3189,9 +3268,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let price_value = price.map(|p| {
                 let units = p.trunc() as i64;
                 let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
@@ -3223,9 +3303,10 @@ impl PyTInvestGrpcClient {
                 instant_execution: None,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.post_sandbox_stop_order(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("post_sandbox_stop_order: {e}"))
-            })?;
+            let response = stub
+                .post_sandbox_stop_order(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("post_sandbox_stop_order: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -3246,9 +3327,10 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let request = proto::GetStopOrdersRequest {
                 account_id: account_id.clone(),
                 status: 0,
@@ -3256,9 +3338,10 @@ impl PyTInvestGrpcClient {
                 to: None,
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.get_sandbox_stop_orders(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_sandbox_stop_orders: {e}"))
-            })?;
+            let response = stub
+                .get_sandbox_stop_orders(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_sandbox_stop_orders: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -3291,17 +3374,19 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.sandbox().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("sandbox service: {e}"))
-            })?;
+            let mut stub = inner
+                .sandbox()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("sandbox service: {e}")))?;
             let request = proto::CancelStopOrderRequest {
                 account_id: account_id.clone(),
                 stop_order_id: stop_order_id.clone(),
             };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.cancel_sandbox_stop_order(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("cancel_sandbox_stop_order: {e}"))
-            })?;
+            let response = stub
+                .cancel_sandbox_stop_order(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("cancel_sandbox_stop_order: {e}")))?;
             let resp = response.into_inner();
 
             Python::attach(|py| {
@@ -3325,16 +3410,16 @@ impl PyTInvestGrpcClient {
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let mut stub = inner.signals().await.map_err(|e| {
-                PyRuntimeError::new_err(format!("signals service: {e}"))
-            })?;
-            let request = proto::GetStrategiesRequest {
-                strategy_id,
-            };
+            let mut stub = inner
+                .signals()
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("signals service: {e}")))?;
+            let request = proto::GetStrategiesRequest { strategy_id };
             let req = inner.with_auth(tonic::Request::new(request));
-            let response = stub.get_strategies(req).await.map_err(|e| {
-                PyRuntimeError::new_err(format!("get_signals: {e}"))
-            })?;
+            let response = stub
+                .get_strategies(req)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("get_signals: {e}")))?;
             let strategies = response.into_inner().strategies;
 
             Python::attach(|py| {

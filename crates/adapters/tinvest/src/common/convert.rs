@@ -20,21 +20,21 @@ use nautilus_model::data::bar::{Bar, BarType};
 use nautilus_model::data::quote::QuoteTick;
 use nautilus_model::data::trade::TradeTick;
 use nautilus_model::enums::AggressorSide;
+use nautilus_model::enums::{AssetClass, OptionKind};
 use nautilus_model::identifiers::{InstrumentId, Symbol, TradeId, Venue};
 use nautilus_model::instruments::any::InstrumentAny;
-use nautilus_model::enums::{AssetClass, OptionKind};
 use nautilus_model::instruments::currency_pair::CurrencyPair;
 use nautilus_model::instruments::equity::Equity;
 use nautilus_model::instruments::futures_contract::FuturesContract;
 use nautilus_model::instruments::option_contract::OptionContract;
-use nautilus_model::types::{Currency, Money, Price, Quantity};
 use nautilus_model::types::fixed::FIXED_PRECISION;
+use nautilus_model::types::{Currency, Money, Price, Quantity};
 use prost_types::Timestamp;
 use rust_decimal::Decimal;
 use tracing::warn;
 use ustr::Ustr;
 
-use crate::common::types::{proto_timestamp_to_datetime, MoneyValue, Quotation};
+use crate::common::types::{MoneyValue, Quotation, proto_timestamp_to_datetime};
 use crate::enums::TINVEST_VENUE;
 
 /// Convert a T-Invest figi/instrument_uid to a Nautilus InstrumentId.
@@ -122,11 +122,7 @@ pub fn price_increment_to_precision(increment: &crate::proto::Quotation) -> u8 {
         warn!(
             "price_increment_to_precision: computed precision {} exceeds FIXED_PRECISION ({}), \
              clamping. Quotation(units={}, nano={}), decimal_str={}",
-            precision,
-            FIXED_PRECISION,
-            increment.units,
-            increment.nano,
-            precision_str,
+            precision, FIXED_PRECISION, increment.units, increment.nano, precision_str,
         );
         FIXED_PRECISION
     } else {
@@ -165,16 +161,16 @@ pub fn convert_share_to_instrument(share: &crate::proto::Share, ts_init: u64) ->
         price_precision,
         price_increment,
         lot_size,
-        None,  // max_quantity
-        None,  // min_quantity
-        None,  // max_price
-        None,  // min_price
-        None,  // margin_init
-        None,  // margin_maint
-        None,  // maker_fee
-        None,  // taker_fee
-        None,  // tick_scheme
-        None,  // info
+        None, // max_quantity
+        None, // min_quantity
+        None, // max_price
+        None, // min_price
+        None, // margin_init
+        None, // margin_maint
+        None, // maker_fee
+        None, // taker_fee
+        None, // tick_scheme
+        None, // info
         ts,
         ts,
     );
@@ -392,10 +388,7 @@ pub fn convert_etf_to_instrument(etf: &crate::proto::Etf, ts_init: u64) -> Instr
 }
 
 /// Convert a T-Invest Option proto to a nautilus OptionContract.
-pub fn convert_option_to_instrument(
-    option: &crate::proto::Option,
-    ts_init: u64,
-) -> InstrumentAny {
+pub fn convert_option_to_instrument(option: &crate::proto::Option, ts_init: u64) -> InstrumentAny {
     // Use uid as the symbol (Option proto has no figi field)
     let instrument_id = to_instrument_id(&option.uid);
     let raw_symbol = Symbol::new(&option.ticker);
@@ -421,10 +414,7 @@ pub fn convert_option_to_instrument(
         .as_ref()
         .map(|q| {
             let decimal = Quotation::from(q).to_decimal();
-            Quantity::new(
-                decimal.to_string().parse::<f64>().unwrap_or(1.0),
-                0,
-            )
+            Quantity::new(decimal.to_string().parse::<f64>().unwrap_or(1.0), 0)
         })
         .unwrap_or_else(|| Quantity::new(1.0, 0));
 
@@ -486,16 +476,16 @@ pub fn convert_option_to_instrument(
         price_increment,
         multiplier,
         lot_size,
-        None,  // max_quantity
-        None,  // min_quantity
-        None,  // max_price
-        None,  // min_price
-        None,  // margin_init
-        None,  // margin_maint
-        None,  // maker_fee
-        None,  // taker_fee
-        None,  // tick_scheme
-        None,  // info
+        None, // max_quantity
+        None, // min_quantity
+        None, // max_price
+        None, // min_price
+        None, // margin_init
+        None, // margin_maint
+        None, // maker_fee
+        None, // taker_fee
+        None, // tick_scheme
+        None, // info
         ts,
         ts,
     );
@@ -584,8 +574,8 @@ pub fn order_side_from_tinvest(direction: i32) -> &'static str {
 /// Convert nautilus OrderSide to T-Invest OrderDirection.
 pub fn order_side_to_tinvest(side: &str) -> i32 {
     match side {
-        "BUY" => 1,   // ORDER_DIRECTION_BUY
-        "SELL" => 2,  // ORDER_DIRECTION_SELL
+        "BUY" => 1,  // ORDER_DIRECTION_BUY
+        "SELL" => 2, // ORDER_DIRECTION_SELL
         _ => 1,
     }
 }
@@ -611,9 +601,9 @@ pub fn order_type_to_tinvest(order_type: &str) -> i32 {
 /// mapped to `"MARKET"`.
 pub fn order_type_from_tinvest(order_type: i32) -> &'static str {
     match order_type {
-        1 => "LIMIT",      // ORDER_TYPE_LIMIT
-        2 => "MARKET",     // ORDER_TYPE_MARKET
-        3 => "MARKET",     // ORDER_TYPE_BESTPRICE — map to MARKET
+        1 => "LIMIT",  // ORDER_TYPE_LIMIT
+        2 => "MARKET", // ORDER_TYPE_MARKET
+        3 => "MARKET", // ORDER_TYPE_BESTPRICE — map to MARKET
         _ => "LIMIT",
     }
 }
@@ -676,9 +666,10 @@ pub fn convert_order_state_to_report(
         .map(UnixNanos::from)
         .unwrap_or(ts_init);
 
-    let avg_px = order.average_position_price.as_ref().map(|mv| {
-        MoneyValue::from(mv).to_decimal()
-    });
+    let avg_px = order
+        .average_position_price
+        .as_ref()
+        .map(|mv| MoneyValue::from(mv).to_decimal());
 
     nautilus_model::reports::OrderStatusReport::new(
         account_id,
@@ -728,13 +719,17 @@ pub fn convert_operation_item_to_fill_reports(
         })
         .unwrap_or(OrderSide::Buy);
 
-    let commission = op.commission.as_ref().map(|mv| {
-        let mv = MoneyValue::from(mv);
-        Money::new(
-            mv.to_decimal().to_string().parse::<f64>().unwrap_or(0.0),
-            Currency::from(mv.currency.as_str()),
-        )
-    }).unwrap_or_else(|| Money::new(0.0, Currency::RUB()));
+    let commission = op
+        .commission
+        .as_ref()
+        .map(|mv| {
+            let mv = MoneyValue::from(mv);
+            Money::new(
+                mv.to_decimal().to_string().parse::<f64>().unwrap_or(0.0),
+                Currency::from(mv.currency.as_str()),
+            )
+        })
+        .unwrap_or_else(|| Money::new(0.0, Currency::RUB()));
 
     let ts_event = op
         .date
@@ -754,10 +749,14 @@ pub fn convert_operation_item_to_fill_reports(
             }
             let trade_id = TradeId::from(trade.num.as_str());
             let last_qty = Quantity::new(trade.quantity as f64, 0);
-            let last_px = trade.price.as_ref().map(|mv| {
-                let mv = MoneyValue::from(mv);
-                Price::new(mv.to_decimal().to_string().parse::<f64>().unwrap_or(0.0), 2)
-            }).unwrap_or_else(|| Price::zero(2));
+            let last_px = trade
+                .price
+                .as_ref()
+                .map(|mv| {
+                    let mv = MoneyValue::from(mv);
+                    Price::new(mv.to_decimal().to_string().parse::<f64>().unwrap_or(0.0), 2)
+                })
+                .unwrap_or_else(|| Price::zero(2));
 
             let report = nautilus_model::reports::FillReport::new(
                 account_id,
@@ -783,10 +782,14 @@ pub fn convert_operation_item_to_fill_reports(
     if reports.is_empty() && op.quantity > 0 {
         let trade_id = TradeId::from(op.id.as_str());
         let last_qty = Quantity::new(op.quantity as f64, 0);
-        let last_px = op.price.as_ref().map(|mv| {
-            let mv = MoneyValue::from(mv);
-            Price::new(mv.to_decimal().to_string().parse::<f64>().unwrap_or(0.0), 2)
-        }).unwrap_or_else(|| Price::zero(2));
+        let last_px = op
+            .price
+            .as_ref()
+            .map(|mv| {
+                let mv = MoneyValue::from(mv);
+                Price::new(mv.to_decimal().to_string().parse::<f64>().unwrap_or(0.0), 2)
+            })
+            .unwrap_or_else(|| Price::zero(2));
 
         let report = nautilus_model::reports::FillReport::new(
             account_id,
@@ -840,9 +843,9 @@ pub fn convert_security_position_to_report(
         quantity,
         ts_init,
         ts_init,
-        None,               // report_id
+        None, // report_id
         venue_position_id,
-        None,               // avg_px_open
+        None, // avg_px_open
     )
 }
 
@@ -910,7 +913,15 @@ pub fn convert_proto_trade_to_tick(
         .as_ref()
         .map_or(ts_init, |t| UnixNanos::from(timestamp_to_unix_nanos(t)));
 
-    TradeTick::new(instrument_id, price, size, aggressor_side, trade_id, ts_event, ts_init)
+    TradeTick::new(
+        instrument_id,
+        price,
+        size,
+        aggressor_side,
+        trade_id,
+        ts_event,
+        ts_init,
+    )
 }
 
 /// Convert a T-Invest proto [`Candle`](crate::proto::Candle) to a Nautilus [`Bar`].

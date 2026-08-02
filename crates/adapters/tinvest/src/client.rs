@@ -32,10 +32,8 @@ use crate::proto::{
     operations_stream_service_client::OperationsStreamServiceClient,
     orders_service_client::OrdersServiceClient,
     orders_stream_service_client::OrdersStreamServiceClient,
-    sandbox_service_client::SandboxServiceClient,
-    signal_service_client::SignalServiceClient,
-    stop_orders_service_client::StopOrdersServiceClient,
-    users_service_client::UsersServiceClient,
+    sandbox_service_client::SandboxServiceClient, signal_service_client::SignalServiceClient,
+    stop_orders_service_client::StopOrdersServiceClient, users_service_client::UsersServiceClient,
 };
 
 /// Error type for T-Invest client operations.
@@ -111,8 +109,9 @@ impl TInvestGrpcClient {
 
         // Add Russian Trusted Root CA if configured (required for T-Invest API in Russia)
         if let Some(ref ca_path) = self.config.ca_cert_path {
-            let ca_pem = std::fs::read_to_string(ca_path)
-                .map_err(|e| TInvestClientError::Auth(format!("Failed to read CA cert file: {e}")))?;
+            let ca_pem = std::fs::read_to_string(ca_path).map_err(|e| {
+                TInvestClientError::Auth(format!("Failed to read CA cert file: {e}"))
+            })?;
             let cert = Certificate::from_pem(ca_pem);
             tls = tls.ca_certificate(cert);
         }
@@ -157,7 +156,10 @@ impl TInvestGrpcClient {
 
     /// Returns true if the client is connected.
     pub fn is_connected(&self) -> bool {
-        self.channel.try_read().map(|c| c.is_some()).unwrap_or(false)
+        self.channel
+            .try_read()
+            .map(|c| c.is_some())
+            .unwrap_or(false)
     }
 
     /// Returns the client configuration.
@@ -194,11 +196,7 @@ impl TInvestGrpcClient {
     /// * `Fut` – the future returning `Result<T, E>`.
     /// * `T`  – success value.
     /// * `E`  – error type (must implement `std::fmt::Display`).
-    pub async fn with_retry<F, Fut, T, E>(
-        &self,
-        operation_name: &str,
-        mut f: F,
-    ) -> Result<T, E>
+    pub async fn with_retry<F, Fut, T, E>(&self, operation_name: &str, mut f: F) -> Result<T, E>
     where
         F: FnMut() -> Fut,
         Fut: Future<Output = Result<T, E>>,
@@ -242,7 +240,9 @@ impl TInvestGrpcClient {
 
     // --- Service stub accessors ---
 
-    pub async fn instruments(&self) -> Result<InstrumentsServiceClient<Channel>, TInvestClientError> {
+    pub async fn instruments(
+        &self,
+    ) -> Result<InstrumentsServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.instruments.write().await;
         if let Some(client) = guard.as_ref() {
             Ok(client.clone())
@@ -254,7 +254,9 @@ impl TInvestGrpcClient {
         }
     }
 
-    pub async fn market_data(&self) -> Result<MarketDataServiceClient<Channel>, TInvestClientError> {
+    pub async fn market_data(
+        &self,
+    ) -> Result<MarketDataServiceClient<Channel>, TInvestClientError> {
         let mut guard = self.market_data.write().await;
         if let Some(client) = guard.as_ref() {
             Ok(client.clone())

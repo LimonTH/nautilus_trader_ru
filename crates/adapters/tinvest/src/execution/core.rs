@@ -15,12 +15,7 @@
 
 //! Live execution client for T-Invest API.
 
-use std::{
-    cell::RefCell,
-    future::Future,
-    rc::Rc,
-    sync::Mutex,
-};
+use std::{cell::RefCell, future::Future, rc::Rc, sync::Mutex};
 
 use async_trait::async_trait;
 use nautilus_common::{
@@ -44,9 +39,7 @@ use nautilus_model::{
     enums::{AccountType, OmsType},
     identifiers::{AccountId, ClientId, TraderId, Venue, VenueOrderId},
     orders::Order,
-    reports::{
-        ExecutionMassStatus, FillReport, OrderStatusReport, PositionStatusReport,
-    },
+    reports::{ExecutionMassStatus, FillReport, OrderStatusReport, PositionStatusReport},
     types::{AccountBalance, Currency, MarginBalance, Money},
 };
 use tokio::task::JoinHandle;
@@ -55,12 +48,12 @@ use tracing::{Instrument, debug, error, info, info_span};
 use crate::client::{TInvestClientError, TInvestGrpcClient};
 use crate::common::convert::{
     convert_futures_position_to_report, convert_operation_item_to_fill_reports,
-    convert_order_state_to_report, convert_security_position_to_report,
-    f64_to_quotation, order_side_to_tinvest, order_type_to_tinvest,
+    convert_order_state_to_report, convert_security_position_to_report, f64_to_quotation,
+    order_side_to_tinvest, order_type_to_tinvest,
 };
 use crate::proto::{
-    GetMaxLotsRequest, GetMaxLotsResponse, OperationsRequest, OperationsResponse,
-    PortfolioRequest, PortfolioResponse,
+    GetMaxLotsRequest, GetMaxLotsResponse, OperationsRequest, OperationsResponse, PortfolioRequest,
+    PortfolioResponse,
 };
 use crate::stream::core::TInvestOrderStateStream;
 
@@ -254,11 +247,7 @@ impl TInvestLiveExecutionClient {
 
         let response = stub.get_max_lots(request).await?;
         let resp = response.into_inner();
-        info!(
-            "Max lots for {}: currency={}",
-            figi,
-            resp.currency,
-        );
+        info!("Max lots for {}: currency={}", figi, resp.currency,);
         Ok(resp)
     }
 
@@ -266,9 +255,7 @@ impl TInvestLiveExecutionClient {
     ///
     /// Dispatches `OrderStateStreamResponse::order_state` messages through the emitter
     /// based on the execution report status.
-    pub async fn start_order_state_stream(
-        &self,
-    ) -> Result<(), tonic::Status> {
+    pub async fn start_order_state_stream(&self) -> Result<(), tonic::Status> {
         let account_id = self.core.account_id.to_string();
         let core_account_id = self.core.account_id;
 
@@ -386,7 +373,8 @@ impl ExecutionClient for TInvestLiveExecutionClient {
         reported: bool,
         ts_event: UnixNanos,
     ) -> anyhow::Result<()> {
-        self.emitter.emit_account_state(balances, margins, reported, ts_event);
+        self.emitter
+            .emit_account_state(balances, margins, reported, ts_event);
         Ok(())
     }
 
@@ -408,7 +396,10 @@ impl ExecutionClient for TInvestLiveExecutionClient {
     async fn connect(&mut self) -> anyhow::Result<()> {
         self.grpc_client.connect().await?;
         self.core.set_connected();
-        info!("Connected T-Invest execution client for account {account_id}", account_id = self.core.account_id);
+        info!(
+            "Connected T-Invest execution client for account {account_id}",
+            account_id = self.core.account_id
+        );
         Ok(())
     }
 
@@ -431,7 +422,11 @@ impl ExecutionClient for TInvestLiveExecutionClient {
         let side = order_side_to_tinvest(cmd.order_init.order_side.as_ref());
         let order_type_str = cmd.order_init.order_type.as_ref().to_string();
         let order_type = order_type_to_tinvest(&order_type_str);
-        let price = cmd.order_init.price.map(|p| p.as_f64()).map(f64_to_quotation);
+        let price = cmd
+            .order_init
+            .price
+            .map(|p| p.as_f64())
+            .map(f64_to_quotation);
         let trigger_price = cmd
             .order_init
             .trigger_price
@@ -561,7 +556,10 @@ impl ExecutionClient for TInvestLiveExecutionClient {
     fn modify_order(&self, cmd: ModifyOrder) -> anyhow::Result<()> {
         let grpc_client = self.grpc_client.clone();
         let account_id = self.core.account_id.to_string();
-        let venue_order_id = cmd.venue_order_id.map(|id| id.to_string()).unwrap_or_default();
+        let venue_order_id = cmd
+            .venue_order_id
+            .map(|id| id.to_string())
+            .unwrap_or_default();
         let quantity = cmd.quantity.map(|q| q.as_f64() as i64).unwrap_or(0);
         let price = cmd.price.map(|p| p.as_f64()).map(f64_to_quotation);
         let idempotency_key = cmd.client_order_id.to_string();
@@ -597,8 +595,7 @@ impl ExecutionClient for TInvestLiveExecutionClient {
                     let venue_oid = VenueOrderId::new(&resp.order_id);
                     info!(
                         "Order modified: order_id={}, status={}",
-                        resp.order_id,
-                        resp.execution_report_status,
+                        resp.order_id, resp.execution_report_status,
                     );
                     let order_qty = order.quantity();
                     emitter.emit_order_updated(
@@ -720,7 +717,7 @@ impl ExecutionClient for TInvestLiveExecutionClient {
         let request = crate::proto::GetOrderStateRequest {
             account_id: account_id_str,
             order_id,
-            price_type: 1, // PRICE_TYPE_POINT
+            price_type: 1,          // PRICE_TYPE_POINT
             order_id_type: Some(1), // ORDER_ID_TYPE_EXCHANGE
         };
         let request = self.grpc_client.with_auth(tonic::Request::new(request));
@@ -729,11 +726,11 @@ impl ExecutionClient for TInvestLiveExecutionClient {
             Ok(response) => {
                 let order_state = response.into_inner();
                 let ts_init = self.clock.get_time_ns();
-                let report = convert_order_state_to_report(&order_state, self.core.account_id, ts_init);
+                let report =
+                    convert_order_state_to_report(&order_state, self.core.account_id, ts_init);
                 info!(
                     "Order status report: order_id={}, status={:?}",
-                    order_state.order_id,
-                    order_state.execution_report_status,
+                    order_state.order_id, order_state.execution_report_status,
                 );
                 Ok(Some(report))
             }
@@ -765,15 +762,10 @@ impl ExecutionClient for TInvestLiveExecutionClient {
         let reports: Vec<OrderStatusReport> = orders_response
             .orders
             .iter()
-            .map(|order| {
-                convert_order_state_to_report(order, self.core.account_id, ts_init)
-            })
+            .map(|order| convert_order_state_to_report(order, self.core.account_id, ts_init))
             .collect();
 
-        info!(
-            "Order status reports: {} orders retrieved",
-            reports.len(),
-        );
+        info!("Order status reports: {} orders retrieved", reports.len(),);
         Ok(reports)
     }
 
@@ -789,23 +781,16 @@ impl ExecutionClient for TInvestLiveExecutionClient {
         let mut all_reports: Vec<FillReport> = Vec::new();
         let ts_init = self.clock.get_time_ns();
 
-        let from = cmd.start.map(|ts| {
-            prost_types::Timestamp {
-                seconds: (ts.as_u64() / 1_000_000_000) as i64,
-                nanos: (ts.as_u64() % 1_000_000_000) as i32,
-            }
+        let from = cmd.start.map(|ts| prost_types::Timestamp {
+            seconds: (ts.as_u64() / 1_000_000_000) as i64,
+            nanos: (ts.as_u64() % 1_000_000_000) as i32,
         });
-        let to = cmd.end.map(|ts| {
-            prost_types::Timestamp {
-                seconds: (ts.as_u64() / 1_000_000_000) as i64,
-                nanos: (ts.as_u64() % 1_000_000_000) as i32,
-            }
+        let to = cmd.end.map(|ts| prost_types::Timestamp {
+            seconds: (ts.as_u64() / 1_000_000_000) as i64,
+            nanos: (ts.as_u64() % 1_000_000_000) as i32,
         });
 
-        let instrument_id_str = cmd
-            .instrument_id
-            .as_ref()
-            .map(|id| id.symbol.to_string());
+        let instrument_id_str = cmd.instrument_id.as_ref().map(|id| id.symbol.to_string());
 
         let mut cursor: Option<String> = None;
         let limit: i32 = 1000;
@@ -830,8 +815,11 @@ impl ExecutionClient for TInvestLiveExecutionClient {
                 Ok(response) => {
                     let resp = response.into_inner();
                     for item in &resp.items {
-                        let fills =
-                            convert_operation_item_to_fill_reports(item, self.core.account_id, ts_init);
+                        let fills = convert_operation_item_to_fill_reports(
+                            item,
+                            self.core.account_id,
+                            ts_init,
+                        );
                         all_reports.extend(fills);
                     }
                     if resp.has_next {
@@ -847,10 +835,7 @@ impl ExecutionClient for TInvestLiveExecutionClient {
             }
         }
 
-        info!(
-            "Fill reports: {} fills retrieved",
-            all_reports.len(),
-        );
+        info!("Fill reports: {} fills retrieved", all_reports.len(),);
         Ok(all_reports)
     }
 

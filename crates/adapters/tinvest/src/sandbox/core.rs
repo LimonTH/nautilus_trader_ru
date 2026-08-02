@@ -15,12 +15,7 @@
 
 //! Sandbox execution client for T-Invest API.
 
-use std::{
-    cell::RefCell,
-    future::Future,
-    rc::Rc,
-    sync::Mutex,
-};
+use std::{cell::RefCell, future::Future, rc::Rc, sync::Mutex};
 
 use async_trait::async_trait;
 use nautilus_common::{
@@ -44,19 +39,17 @@ use nautilus_model::{
     enums::{AccountType, OmsType},
     identifiers::{AccountId, ClientId, TraderId, Venue, VenueOrderId},
     orders::Order,
-    reports::{
-        ExecutionMassStatus, FillReport, OrderStatusReport, PositionStatusReport,
-    },
+    reports::{ExecutionMassStatus, FillReport, OrderStatusReport, PositionStatusReport},
     types::{AccountBalance, Currency, MarginBalance, Money},
 };
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info, info_span, Instrument};
+use tracing::{Instrument, debug, error, info, info_span};
 
 use crate::client::{TInvestClientError, TInvestGrpcClient};
 use crate::common::convert::{
     convert_futures_position_to_report, convert_operation_item_to_fill_reports,
-    convert_order_state_to_report, convert_security_position_to_report,
-    f64_to_quotation, order_side_to_tinvest, order_type_to_tinvest,
+    convert_order_state_to_report, convert_security_position_to_report, f64_to_quotation,
+    order_side_to_tinvest, order_type_to_tinvest,
 };
 use crate::proto::{
     GetLastPricesRequest, GetLastPricesResponse, OperationsRequest, OperationsResponse,
@@ -169,7 +162,9 @@ impl TInvestSandboxExecutionClient {
     }
 
     /// Get sandbox portfolio.
-    pub async fn get_sandbox_portfolio(&self) -> anyhow::Result<Option<crate::proto::PortfolioResponse>> {
+    pub async fn get_sandbox_portfolio(
+        &self,
+    ) -> anyhow::Result<Option<crate::proto::PortfolioResponse>> {
         let mut stub = self.grpc_client.sandbox().await?;
 
         let request = crate::proto::PortfolioRequest {
@@ -188,7 +183,9 @@ impl TInvestSandboxExecutionClient {
     }
 
     /// Get sandbox positions.
-    pub async fn get_sandbox_positions(&self) -> anyhow::Result<Option<crate::proto::PositionsResponse>> {
+    pub async fn get_sandbox_positions(
+        &self,
+    ) -> anyhow::Result<Option<crate::proto::PositionsResponse>> {
         let mut stub = self.grpc_client.sandbox().await?;
 
         let request = crate::proto::PositionsRequest {
@@ -383,7 +380,8 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
         reported: bool,
         ts_event: UnixNanos,
     ) -> anyhow::Result<()> {
-        self.emitter.emit_account_state(balances, margins, reported, ts_event);
+        self.emitter
+            .emit_account_state(balances, margins, reported, ts_event);
         Ok(())
     }
 
@@ -427,7 +425,11 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
         let quantity = cmd.order_init.quantity.as_f64() as i64;
         let side = order_side_to_tinvest(cmd.order_init.order_side.as_ref());
         let order_type = order_type_to_tinvest(cmd.order_init.order_type.as_ref());
-        let price = cmd.order_init.price.map(|p| p.as_f64()).map(f64_to_quotation);
+        let price = cmd
+            .order_init
+            .price
+            .map(|p| p.as_f64())
+            .map(f64_to_quotation);
         let emitter = self.emitter.clone();
         let ts_event = self.clock.get_time_ns();
 
@@ -488,7 +490,10 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
     fn modify_order(&self, cmd: ModifyOrder) -> anyhow::Result<()> {
         let grpc_client = self.grpc_client.clone();
         let account_id = self.core.account_id.to_string();
-        let venue_order_id = cmd.venue_order_id.map(|id| id.to_string()).unwrap_or_default();
+        let venue_order_id = cmd
+            .venue_order_id
+            .map(|id| id.to_string())
+            .unwrap_or_default();
         let quantity = cmd.quantity.map(|q| q.as_f64() as i64).unwrap_or(0);
         let price = cmd.price.map(|p| p.as_f64()).map(f64_to_quotation);
         let idempotency_key = cmd.client_order_id.to_string();
@@ -523,8 +528,7 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
                     let venue_oid = VenueOrderId::new(&resp.order_id);
                     info!(
                         "Sandbox order modified: order_id={}, status={}",
-                        resp.order_id,
-                        resp.execution_report_status,
+                        resp.order_id, resp.execution_report_status,
                     );
                     let order_qty = order.quantity();
                     emitter.emit_order_updated(
@@ -617,7 +621,10 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
     }
 
     fn query_account(&self, _cmd: QueryAccount) -> anyhow::Result<()> {
-        info!("Querying sandbox account state for {}", self.core.account_id);
+        info!(
+            "Querying sandbox account state for {}",
+            self.core.account_id
+        );
         self.update_account_state();
         Ok(())
     }
@@ -658,8 +665,7 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
                     convert_order_state_to_report(&order_state, self.core.account_id, ts_init);
                 info!(
                     "Sandbox order status: order_id={}, status={:?}",
-                    order_state.order_id,
-                    order_state.execution_report_status,
+                    order_state.order_id, order_state.execution_report_status,
                 );
                 Ok(Some(report))
             }
@@ -691,9 +697,7 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
         let reports: Vec<OrderStatusReport> = orders_response
             .orders
             .iter()
-            .map(|order| {
-                convert_order_state_to_report(order, self.core.account_id, ts_init)
-            })
+            .map(|order| convert_order_state_to_report(order, self.core.account_id, ts_init))
             .collect();
         info!("Sandbox orders: {} retrieved", reports.len());
         Ok(reports)
@@ -719,10 +723,7 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
             seconds: (ts.as_u64() / 1_000_000_000) as i64,
             nanos: (ts.as_u64() % 1_000_000_000) as i32,
         });
-        let instrument_id_str = cmd
-            .instrument_id
-            .as_ref()
-            .map(|id| id.symbol.to_string());
+        let instrument_id_str = cmd.instrument_id.as_ref().map(|id| id.symbol.to_string());
 
         let mut cursor: Option<String> = None;
         let limit: i32 = 1000;
@@ -747,12 +748,11 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
                 Ok(response) => {
                     let resp = response.into_inner();
                     for item in &resp.items {
-                        let fills =
-                            convert_operation_item_to_fill_reports(
-                                item,
-                                self.core.account_id,
-                                ts_init,
-                            );
+                        let fills = convert_operation_item_to_fill_reports(
+                            item,
+                            self.core.account_id,
+                            ts_init,
+                        );
                         all_reports.extend(fills);
                     }
                     if resp.has_next {
@@ -768,7 +768,10 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
             }
         }
 
-        info!("Sandbox fill reports: {} fills retrieved", all_reports.len());
+        info!(
+            "Sandbox fill reports: {} fills retrieved",
+            all_reports.len()
+        );
         Ok(all_reports)
     }
 
@@ -806,10 +809,7 @@ impl ExecutionClient for TInvestSandboxExecutionClient {
             ));
         }
 
-        info!(
-            "Sandbox positions: {} positions retrieved",
-            reports.len(),
-        );
+        info!("Sandbox positions: {} positions retrieved", reports.len(),);
         Ok(reports)
     }
 

@@ -15,10 +15,7 @@
 
 //! Live market data client for T-Invest API.
 
-use std::{
-    future::Future,
-    sync::Mutex,
-};
+use std::{future::Future, sync::Mutex};
 
 use async_trait::async_trait;
 use nautilus_common::{
@@ -27,10 +24,9 @@ use nautilus_common::{
     messages::{
         DataEvent,
         data::{
-            RequestBars,
-            RequestBookDeltas, RequestBookDepth, RequestBookSnapshot, RequestForwardPrices,
-            RequestFundingRates, RequestInstrument, RequestInstruments, RequestQuotes,
-            RequestTrades, SubscribeInstrument, SubscribeInstruments,
+            RequestBars, RequestBookDeltas, RequestBookDepth, RequestBookSnapshot,
+            RequestForwardPrices, RequestFundingRates, RequestInstrument, RequestInstruments,
+            RequestQuotes, RequestTrades, SubscribeInstrument, SubscribeInstruments,
             UnsubscribeInstrument, UnsubscribeInstruments,
         },
     },
@@ -39,11 +35,11 @@ use nautilus_core::{
     MUTEX_POISONED,
     time::{AtomicTime, get_atomic_clock_realtime},
 };
+use nautilus_model::data::Data;
 use nautilus_model::{
     identifiers::{ClientId, Venue},
     instruments::Instrument,
 };
-use nautilus_model::data::Data;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, info_span, warn};
 
@@ -51,13 +47,13 @@ use crate::client::{TInvestClientError, TInvestGrpcClient};
 use crate::common::convert::{
     convert_bond_to_instrument, convert_currency_to_instrument, convert_etf_to_instrument,
     convert_future_to_instrument, convert_option_to_instrument, convert_proto_candle_to_bar,
-    convert_proto_orderbook_to_quote_tick, convert_proto_trade_to_tick, convert_share_to_instrument,
+    convert_proto_orderbook_to_quote_tick, convert_proto_trade_to_tick,
+    convert_share_to_instrument,
 };
 use crate::proto::{
     GetCandlesRequest, GetClosePricesRequest, GetClosePricesResponse, GetLastPricesRequest,
     GetLastPricesResponse, GetLastTradesRequest, GetOrderBookRequest, GetTradingStatusRequest,
-    GetTradingStatusResponse, InstrumentRequest, InstrumentsRequest,
-    market_data_response::Payload,
+    GetTradingStatusResponse, InstrumentRequest, InstrumentsRequest, market_data_response::Payload,
 };
 use crate::stream::core::TInvestMarketDataStream;
 
@@ -265,9 +261,7 @@ impl TInvestLiveMarketDataClient {
     /// - `MarketDataResponse::trade` → `DataEvent::Data(Data::Trade(...))`
     /// - `MarketDataResponse::orderbook` → `DataEvent::Data(Data::Quote(...))`
     /// - `MarketDataResponse::candle` → `DataEvent::Data(Data::Bar(...))`
-    pub async fn start_market_data_stream(
-        &self,
-    ) -> Result<(), tonic::Status> {
+    pub async fn start_market_data_stream(&self) -> Result<(), tonic::Status> {
         let sender = match &self.data_sender {
             Some(s) => s.clone(),
             None => {
@@ -288,11 +282,7 @@ impl TInvestLiveMarketDataClient {
                         Payload::Trade(trade) => {
                             let instrument_id =
                                 crate::common::convert::to_instrument_id(&trade.figi);
-                            let tick = convert_proto_trade_to_tick(
-                                &trade,
-                                instrument_id,
-                                ts_init,
-                            );
+                            let tick = convert_proto_trade_to_tick(&trade, instrument_id, ts_init);
                             Some(DataEvent::Data(Data::Trade(tick)))
                         }
                         Payload::Orderbook(orderbook) => {
@@ -309,10 +299,8 @@ impl TInvestLiveMarketDataClient {
                             let instrument_id =
                                 crate::common::convert::to_instrument_id(&candle.figi);
                             // Build a BarType from the candle interval
-                            let bar_type = candle_interval_to_bar_type(
-                                candle.interval,
-                                instrument_id,
-                            );
+                            let bar_type =
+                                candle_interval_to_bar_type(candle.interval, instrument_id);
                             if let Some(bt) = bar_type {
                                 let bar = convert_proto_candle_to_bar(&candle, bt, ts_init);
                                 Some(DataEvent::Data(Data::Bar(bar)))
@@ -361,7 +349,11 @@ fn candle_interval_to_bar_type(
         13 => BarSpecification::new(1, BarAggregation::Month, PriceType::Last),
         _ => return None,
     };
-    Some(BarType::new(instrument_id, spec, AggregationSource::External))
+    Some(BarType::new(
+        instrument_id,
+        spec,
+        AggregationSource::External,
+    ))
 }
 
 #[async_trait(?Send)]
@@ -389,11 +381,19 @@ impl DataClient for TInvestLiveMarketDataClient {
         Ok(())
     }
 
-    fn reset(&mut self) -> anyhow::Result<()> { Ok(()) }
-    fn dispose(&mut self) -> anyhow::Result<()> { Ok(()) }
+    fn reset(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+    fn dispose(&mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
 
-    fn is_connected(&self) -> bool { self.grpc_client.is_connected() }
-    fn is_disconnected(&self) -> bool { !self.grpc_client.is_connected() }
+    fn is_connected(&self) -> bool {
+        self.grpc_client.is_connected()
+    }
+    fn is_disconnected(&self) -> bool {
+        !self.grpc_client.is_connected()
+    }
 
     async fn connect(&mut self) -> anyhow::Result<()> {
         self.grpc_client.connect().await?;
@@ -649,7 +649,9 @@ impl DataClient for TInvestLiveMarketDataClient {
             let book = resp.into_inner();
             info!(
                 "Got order book for {}: {} bids, {} asks",
-                figi, book.bids.len(), book.asks.len(),
+                figi,
+                book.bids.len(),
+                book.asks.len(),
             );
 
             let instrument_id = crate::common::convert::to_instrument_id(&figi);
@@ -670,7 +672,8 @@ impl DataClient for TInvestLiveMarketDataClient {
                 ticker: book.ticker.clone(),
                 class_code: book.class_code.clone(),
             };
-            if let Some(quote) = convert_proto_orderbook_to_quote_tick(&orderbook, instrument_id, ts_init)
+            if let Some(quote) =
+                convert_proto_orderbook_to_quote_tick(&orderbook, instrument_id, ts_init)
             {
                 if let Err(e) = sender.send(DataEvent::Data(Data::Quote(quote))) {
                     warn!("Failed to send quote: {e}");
@@ -784,7 +787,9 @@ impl DataClient for TInvestLiveMarketDataClient {
             let candles = resp.into_inner();
             info!(
                 "Got {} candles for {} (interval={})",
-                candles.candles.len(), figi, candle_interval,
+                candles.candles.len(),
+                figi,
+                candle_interval,
             );
 
             let ts_init = clock.get_time_ns();

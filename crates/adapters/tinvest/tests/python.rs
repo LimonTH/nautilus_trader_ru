@@ -15,10 +15,7 @@
 
 #![cfg(feature = "python")]
 
-use nautilus_tinvest::{
-    config::TInvestClientConfig,
-    python,
-};
+use nautilus_tinvest::{config::TInvestClientConfig, python};
 use pyo3::{Py, Python, types::PyModule};
 use rstest::rstest;
 

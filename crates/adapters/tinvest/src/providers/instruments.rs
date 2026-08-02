@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::InstrumentId;
-use nautilus_model::instruments::{any::InstrumentAny, Instrument};
+use nautilus_model::instruments::{Instrument, any::InstrumentAny};
 
 use crate::client::TInvestGrpcClient;
 use crate::common::convert::{
@@ -61,7 +61,10 @@ impl TInvestInstrumentProvider {
             let instrument = convert_share_to_instrument(share, ts_init.as_u64());
             self.instruments.insert(instrument.id(), instrument);
         }
-        tracing::info!("Loaded {} shares", shares_response.get_ref().instruments.len());
+        tracing::info!(
+            "Loaded {} shares",
+            shares_response.get_ref().instruments.len()
+        );
 
         // Load bonds
         tracing::info!("Loading bonds from T-Invest API...");
@@ -72,7 +75,10 @@ impl TInvestInstrumentProvider {
             let instrument = convert_bond_to_instrument(bond, ts_init.as_u64());
             self.instruments.insert(instrument.id(), instrument);
         }
-        tracing::info!("Loaded {} bonds", bonds_response.get_ref().instruments.len());
+        tracing::info!(
+            "Loaded {} bonds",
+            bonds_response.get_ref().instruments.len()
+        );
 
         // Load futures
         tracing::info!("Loading futures from T-Invest API...");
@@ -83,7 +89,10 @@ impl TInvestInstrumentProvider {
             let instrument = convert_future_to_instrument(future, ts_init.as_u64());
             self.instruments.insert(instrument.id(), instrument);
         }
-        tracing::info!("Loaded {} futures", futures_response.get_ref().instruments.len());
+        tracing::info!(
+            "Loaded {} futures",
+            futures_response.get_ref().instruments.len()
+        );
 
         // Load ETFs
         tracing::info!("Loading ETFs from T-Invest API...");
@@ -105,7 +114,10 @@ impl TInvestInstrumentProvider {
             let instrument = convert_currency_to_instrument(currency, ts_init.as_u64());
             self.instruments.insert(instrument.id(), instrument);
         }
-        tracing::info!("Loaded {} currencies", currencies_response.get_ref().instruments.len());
+        tracing::info!(
+            "Loaded {} currencies",
+            currencies_response.get_ref().instruments.len()
+        );
 
         tracing::info!(
             "T-Invest instrument provider loaded {} instruments total",

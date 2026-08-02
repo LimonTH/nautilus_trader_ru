@@ -104,9 +104,9 @@ pub fn order_side_to_order_direction(side: &str) -> i32 {
 /// Mapping from T-Invest OrderType to Nautilus order type string.
 pub fn order_type_to_nautilus(order_type: i32) -> &'static str {
     match order_type {
-        1 => "LIMIT",   // ORDER_TYPE_LIMIT
-        2 => "MARKET",  // ORDER_TYPE_MARKET
-        3 => "LIMIT",   // ORDER_TYPE_BESTPRICE
+        1 => "LIMIT",  // ORDER_TYPE_LIMIT
+        2 => "MARKET", // ORDER_TYPE_MARKET
+        3 => "LIMIT",  // ORDER_TYPE_BESTPRICE
         _ => "LIMIT",
     }
 }
