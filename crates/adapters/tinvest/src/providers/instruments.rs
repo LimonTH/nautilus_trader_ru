@@ -47,7 +47,7 @@ impl TInvestInstrumentProvider {
     pub async fn load_all(&mut self) -> anyhow::Result<()> {
         let ts_init = UnixNanos::default();
         let request = InstrumentsRequest {
-            instrument_status: Some(1), // INSTRUMENT_STATUS_BASE
+            instrument_status: Some(1),
             instrument_exchange: None,
         };
         let mut stub = self.grpc_client.instruments().await?;

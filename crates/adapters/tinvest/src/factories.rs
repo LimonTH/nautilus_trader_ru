@@ -36,9 +36,7 @@ use crate::execution::core::TInvestLiveExecutionClient;
 /// Venue identifier constant.
 pub const TINVEST: &str = "TINVEST";
 
-// ---------------------------------------------------------------------------
 // ClientConfig impl
-// ---------------------------------------------------------------------------
 
 impl ClientConfig for TInvestClientConfig {
     fn as_any(&self) -> &dyn Any {
@@ -46,9 +44,7 @@ impl ClientConfig for TInvestClientConfig {
     }
 }
 
-// ---------------------------------------------------------------------------
 // DataClientFactory
-// ---------------------------------------------------------------------------
 
 /// Factory for creating T-Invest live market data clients.
 #[derive(Debug, Clone)]
@@ -109,9 +105,7 @@ impl DataClientFactory for TInvestDataClientFactory {
     }
 }
 
-// ---------------------------------------------------------------------------
 // ExecutionClientFactory
-// ---------------------------------------------------------------------------
 
 /// Factory for creating T-Invest live execution clients.
 #[derive(Debug, Clone)]

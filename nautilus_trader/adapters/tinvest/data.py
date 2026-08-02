@@ -32,6 +32,7 @@ from nautilus_trader.core import nautilus_pyo3
 from nautilus_trader.live.cancellation import DEFAULT_FUTURE_CANCELLATION_TIMEOUT
 from nautilus_trader.live.data_client import LiveMarketDataClient
 from nautilus_trader.model.data import Bar
+from nautilus_trader.model.data import BarSpecification
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.data import BookOrder
 from nautilus_trader.model.data import DataType
@@ -58,25 +59,17 @@ except ImportError:
     TInvestMarketDataStream = None  # type: ignore
     _HAS_NATIVE_STREAM_CLASS = False
 
-# Map T-Invest candle interval to BarSpec string
-_CANDLE_INTERVAL_MAP: dict[int, str] = {
-    1: "1-MINUTE",
-    2: "5-MINUTE",
-    3: "15-MINUTE",
-    4: "1-HOUR",
-    5: "1-DAY",
-    6: "2-MINUTE",
-    7: "3-MINUTE",
-    8: "10-MINUTE",
-    9: "30-MINUTE",
-    10: "2-HOUR",
-    11: "4-HOUR",
-    12: "1-WEEK",
-    13: "1-MONTH",
-}
+from nautilus_trader.adapters.tinvest.constants import _CANDLE_INTERVAL_MAP
+from nautilus_trader.adapters.tinvest.constants import _BAR_SPEC_TO_INTERVAL
 
-# Reverse map from BarSpec string to T-Invest candle interval
-_BAR_SPEC_TO_INTERVAL: dict[str, int] = {v: k for k, v in _CANDLE_INTERVAL_MAP.items()}
+from nautilus_trader.core.datetime import unix_nanos_to_dt
+
+
+def _datetime_to_ns(dt: datetime | None) -> int | None:
+    """Convert a datetime to UNIX nanoseconds, or return None if dt is None."""
+    if dt is None:
+        return None
+    return int(dt.timestamp() * 1_000_000_000)
 
 
 def _price_from_quotation(quotation: dict | None) -> float:
@@ -258,7 +251,7 @@ class TInvestDataClient(LiveMarketDataClient):
         pass
 
     async def _subscribe_order_book_snapshot(self, instrument_id: InstrumentId) -> None:
-        figi = instrument_id.symbol.to_string()
+        figi = str(instrument_id.symbol)
         use_native = (
             self._market_data_stream is not None
             and self._market_data_stream.is_active
@@ -276,7 +269,7 @@ class TInvestDataClient(LiveMarketDataClient):
             )
 
     async def _unsubscribe_order_book_snapshot(self, instrument_id: InstrumentId) -> None:
-        figi = instrument_id.symbol.to_string()
+        figi = str(instrument_id.symbol)
         use_native = (
             self._market_data_stream is not None
             and self._market_data_stream.is_active
@@ -290,7 +283,7 @@ class TInvestDataClient(LiveMarketDataClient):
             await self._client.unsubscribe_order_book(figi, depth=10)
 
     async def _subscribe_quote_ticks(self, instrument_id: InstrumentId) -> None:
-        figi = instrument_id.symbol.to_string()
+        figi = str(instrument_id.symbol)
         use_native = (
             self._market_data_stream is not None
             and self._market_data_stream.is_active
@@ -310,7 +303,7 @@ class TInvestDataClient(LiveMarketDataClient):
             )
 
     async def _unsubscribe_quote_ticks(self, instrument_id: InstrumentId) -> None:
-        figi = instrument_id.symbol.to_string()
+        figi = str(instrument_id.symbol)
         use_native = (
             self._market_data_stream is not None
             and self._market_data_stream.is_active
@@ -324,7 +317,7 @@ class TInvestDataClient(LiveMarketDataClient):
             await self._client.unsubscribe_order_book(figi, depth=1)
 
     async def _subscribe_trade_ticks(self, instrument_id: InstrumentId) -> None:
-        figi = instrument_id.symbol.to_string()
+        figi = str(instrument_id.symbol)
         use_native = (
             self._market_data_stream is not None
             and self._market_data_stream.is_active
@@ -341,7 +334,7 @@ class TInvestDataClient(LiveMarketDataClient):
             )
 
     async def _unsubscribe_trade_ticks(self, instrument_id: InstrumentId) -> None:
-        figi = instrument_id.symbol.to_string()
+        figi = str(instrument_id.symbol)
         use_native = (
             self._market_data_stream is not None
             and self._market_data_stream.is_active
@@ -355,7 +348,7 @@ class TInvestDataClient(LiveMarketDataClient):
             await self._client.unsubscribe_trades(figi)
 
     async def _subscribe_bars(self, instrument_id: InstrumentId) -> None:
-        figi = instrument_id.symbol.to_string()
+        figi = str(instrument_id.symbol)
         use_native = (
             self._market_data_stream is not None
             and self._market_data_stream.is_active
@@ -376,7 +369,7 @@ class TInvestDataClient(LiveMarketDataClient):
             )
 
     async def _unsubscribe_bars(self, instrument_id: InstrumentId) -> None:
-        figi = instrument_id.symbol.to_string()
+        figi = str(instrument_id.symbol)
         use_native = (
             self._market_data_stream is not None
             and self._market_data_stream.is_active
@@ -495,11 +488,11 @@ class TInvestDataClient(LiveMarketDataClient):
         try:
             direction = data.get("direction", 0)
             if direction == 1:
-                aggressor_side = AggressorSide.BUY
+                aggressor_side = AggressorSide.BUYER
             elif direction == 2:
-                aggressor_side = AggressorSide.SELL
+                aggressor_side = AggressorSide.SELLER
             else:
-                aggressor_side = AggressorSide.BUY
+                aggressor_side = AggressorSide.BUYER
 
             price_val = _price_from_quotation(data.get("price"))
             quantity = float(data.get("quantity", 0))
@@ -649,7 +642,8 @@ class TInvestDataClient(LiveMarketDataClient):
         """Convert native candle dict to Bar and push to data engine."""
         try:
             interval = data.get("interval", 1)
-            bar_spec = _CANDLE_INTERVAL_MAP.get(interval, "1-MINUTE")
+            bar_spec_str = _CANDLE_INTERVAL_MAP.get(interval, "1-MINUTE-LAST")
+            bar_spec = BarSpecification.from_str(bar_spec_str)
             bar_type = BarType(instrument_id, bar_spec)
 
             open_px = _price_from_quotation(data.get("open"))
@@ -790,32 +784,41 @@ class TInvestDataClient(LiveMarketDataClient):
         except Exception as e:
             self._log.warning(f"Failed to process quote tick for {instrument_id}: {e}")
 
-    def _on_trade_tick(self, instrument_id: InstrumentId, data: list[dict]) -> None:
+    def _on_trade_tick(self, instrument_id: InstrumentId, data: list[dict] | dict) -> None:
         """Handle trade updates from streaming.
 
-        Converts T-Invest trade list to TradeTick objects.
+        Converts T-Invest trade list (or single dict) to TradeTick objects.
+
+        The gRPC polling callback passes a list, but the native stream may pass
+        a single dict.  Both forms are accepted.
         """
         try:
             if not data:
                 return
 
+            # Normalize: accept both single dict and list
+            if isinstance(data, dict):
+                trades: list[dict] = [data]
+            else:
+                trades: list[dict] = data
+
             instrument = self._cache.instrument(instrument_id)
             price_precision = instrument.price_precision if instrument else 2
             size_precision = instrument.size_precision if instrument else 0
 
-            for trade in data:
+            for trade in trades:
                 price_val = _price_from_quotation(trade.get("price"))
                 quantity = float(trade.get("quantity", 0))
                 direction_str = trade.get("direction", "UNSPECIFIED")
 
                 # Map direction to aggressor side
                 if direction_str == "BUY":
-                    aggressor_side = AggressorSide.BUY
+                    aggressor_side = AggressorSide.BUYER
                 elif direction_str == "SELL":
-                    aggressor_side = AggressorSide.SELL
+                    aggressor_side = AggressorSide.SELLER
                 else:
-                    # Default to BUY for unspecified
-                    aggressor_side = AggressorSide.BUY
+                    # Default to BUYER for unspecified
+                    aggressor_side = AggressorSide.BUYER
 
                 trade_id_str = trade.get("trade_id", "")
                 trade_id = TradeId(trade_id_str) if trade_id_str else TradeId("0")
@@ -851,7 +854,8 @@ class TInvestDataClient(LiveMarketDataClient):
             size_precision = instrument.size_precision if instrument else 0
 
             # Determine bar spec from interval
-            bar_spec = _CANDLE_INTERVAL_MAP.get(interval, "1-MINUTE")
+            bar_spec_str = _CANDLE_INTERVAL_MAP.get(interval, "1-MINUTE-LAST")
+            bar_spec = BarSpecification.from_str(bar_spec_str)
             bar_type = BarType(instrument_id, bar_spec)
 
             for candle in data:
@@ -881,7 +885,12 @@ class TInvestDataClient(LiveMarketDataClient):
 
     # -- Requests ---------------------------------------------------------------------------------
 
-    async def _request_instrument(self, instrument_id: InstrumentId) -> None:
+    async def _request_instrument(
+        self,
+        request: "RequestInstrument",
+    ) -> None:
+        instrument_id = request.instrument_id
+
         # Check cache first
         cached = self._instrument_provider.get_instrument(str(instrument_id))
         if cached is not None:
@@ -890,7 +899,7 @@ class TInvestDataClient(LiveMarketDataClient):
             return
 
         # Try loading via gRPC
-        figi = instrument_id.symbol.to_string()
+        figi = str(instrument_id.symbol)
         result = await self._client.request_instrument(figi)
         if result is not None:
             instrument = _try_dict_to_instrument(result)
@@ -905,7 +914,10 @@ class TInvestDataClient(LiveMarketDataClient):
         else:
             self._log.warning(f"Instrument not found: {instrument_id}")
 
-    async def _request_instruments(self) -> None:
+    async def _request_instruments(
+        self,
+        request: "RequestInstruments",
+    ) -> None:
         # Load all instruments via the provider
         if not self._instrument_provider.is_loaded:
             await self._instrument_provider.load_all()
@@ -915,92 +927,176 @@ class TInvestDataClient(LiveMarketDataClient):
 
     async def _request_quote_ticks(
         self,
-        instrument_id: InstrumentId,
-        limit: int | None = None,
+        request: "RequestQuoteTicks",
     ) -> None:
-        figi = instrument_id.symbol.to_string()
+        instrument_id = request.instrument_id
+        figi = str(instrument_id.symbol)
+        limit = request.limit if request.limit > 0 else None
         depth = limit or 10
 
         self._log.info(f"Requesting order book for {figi} depth={depth}")
 
-        order_book = await self._client.request_order_book(figi, depth)
-        if order_book is not None:
-            bids = order_book.get("bids", [])
-            asks = order_book.get("asks", [])
-            self._log.info(
-                f"Got order book for {figi}: {len(bids)} bids, {len(asks)} asks",
-            )
-
-            # Convert best bid/ask to QuoteTick
-            if bids and asks:
-                best_bid = bids[0]
-                best_ask = asks[0]
-                bid_price = _price_from_quotation(best_bid.get("price"))
-                ask_price = _price_from_quotation(best_ask.get("price"))
-                bid_size = float(best_bid.get("quantity", 0))
-                ask_size = float(best_ask.get("quantity", 0))
-                ts_event = self._clock.timestamp_ns()
-
-                instrument = self._cache.instrument(instrument_id)
-                price_precision = instrument.price_precision if instrument else 2
-                size_precision = instrument.size_precision if instrument else 0
-
-                tick = QuoteTick(
-                    instrument_id=instrument_id,
-                    bid_price=Price(bid_price, price_precision),
-                    ask_price=Price(ask_price, price_precision),
-                    bid_size=Quantity(bid_size, size_precision),
-                    ask_size=Quantity(ask_size, size_precision),
-                    ts_event=ts_event,
-                    ts_init=ts_event,
+        try:
+            order_book = await self._client.request_order_book(figi, depth)
+            if order_book is not None:
+                bids = order_book.get("bids", [])
+                asks = order_book.get("asks", [])
+                self._log.info(
+                    f"Got order book for {figi}: {len(bids)} bids, {len(asks)} asks",
                 )
-                self._handle_data(tick)
+
+                # Convert best bid/ask to QuoteTick
+                if bids and asks:
+                    best_bid = bids[0]
+                    best_ask = asks[0]
+                    bid_price = _price_from_quotation(best_bid.get("price"))
+                    ask_price = _price_from_quotation(best_ask.get("price"))
+                    bid_size = float(best_bid.get("quantity", 0))
+                    ask_size = float(best_ask.get("quantity", 0))
+                    ts_event = self._clock.timestamp_ns()
+
+                    instrument = self._cache.instrument(instrument_id)
+                    price_precision = instrument.price_precision if instrument else 2
+                    size_precision = instrument.size_precision if instrument else 0
+
+                    tick = QuoteTick(
+                        instrument_id=instrument_id,
+                        bid_price=Price(bid_price, price_precision),
+                        ask_price=Price(ask_price, price_precision),
+                        bid_size=Quantity(bid_size, size_precision),
+                        ask_size=Quantity(ask_size, size_precision),
+                        ts_event=ts_event,
+                        ts_init=ts_event,
+                    )
+                    self._handle_data(tick)
+
+        except Exception as e:
+            self._log.error(f"Error requesting quote ticks for {instrument_id}: {e}")
 
     async def _request_trade_ticks(
         self,
-        instrument_id: InstrumentId,
-        limit: int | None = None,
+        request: "RequestTradeTicks",
     ) -> None:
-        figi = instrument_id.symbol.to_string()
+        instrument_id = request.instrument_id
+        figi = str(instrument_id.symbol)
         self._log.info(f"Requesting trades for {figi}")
 
-        trades = await self._client.request_trades(figi)
-        self._log.info(f"Got {len(trades)} trades for {figi}")
+        try:
+            trades = await self._client.request_trades(
+                figi=figi,
+                from_ts=_datetime_to_ns(request.start) if request.start else None,
+                to_ts=_datetime_to_ns(request.end) if request.end else None,
+            )
+            self._log.info(f"Got {len(trades)} trades for {figi}")
 
-        # Process via callback handler
-        self._on_trade_tick(instrument_id, trades)
+            # Process via callback handler
+            self._on_trade_tick(instrument_id, trades)
 
-    async def _request_bars(self, data_type: DataType) -> None:
-        metadata = data_type.metadata
-        instrument_id = metadata.get("instrument_id")
-        bar_spec = metadata.get("bar_spec")
+        except Exception as e:
+            self._log.error(f"Error requesting trade ticks for {instrument_id}: {e}")
 
-        if instrument_id is None:
-            self._log.warning("No instrument_id in bar request metadata")
-            return
+    async def _request_order_book_snapshot(
+        self,
+        request: "RequestOrderBookSnapshot",
+    ) -> None:
+        instrument_id = request.instrument_id
+        figi = str(instrument_id.symbol)
+        depth = request.depth if hasattr(request, 'depth') and request.depth else 10
 
-        self._log.info(f"Requesting bars for {instrument_id} spec={bar_spec}")
+        self._log.info(f"Requesting order book snapshot for {figi} depth={depth}")
 
-        # Map bar_spec to T-Invest candle interval
-        interval = _BAR_SPEC_TO_INTERVAL.get(str(bar_spec))
-        if interval is None:
-            self._log.warning(f"Unknown bar spec: {bar_spec}")
-            return
+        try:
+            order_book = await self._client.request_order_book(figi, depth)
+            if order_book is not None:
+                self._on_order_book(instrument_id, order_book)
 
-        figi = str(instrument_id)
-        now_ns = self._clock.timestamp_ns()
-        one_day_ns = 86_400_000_000_000  # 24 hours in nanos
-        from_ns = now_ns - one_day_ns * 30  # Default: last 30 days
+        except Exception as e:
+            self._log.error(f"Error requesting order book snapshot for {instrument_id}: {e}")
 
-        candles = await self._client.request_candles(
-            figi=figi,
-            interval=interval,
-            from_ts=from_ns,
-            to_ts=now_ns,
-            limit=100,
+    async def _request_bars(
+        self,
+        request: "RequestBars",
+    ) -> None:
+        bar_type = request.bar_type
+        instrument_id = bar_type.instrument_id
+        bar_spec_str = str(bar_type.spec)
+
+        self._log.info(
+            f"Requesting bars for {instrument_id} bar_type={bar_type} "
+            f"start={request.start} end={request.end} limit={request.limit}",
         )
 
-        self._log.info(f"Got {len(candles)} candles for {figi}")
+        # Map bar_spec to T-Invest candle interval
+        interval = _BAR_SPEC_TO_INTERVAL.get(bar_spec_str)
+        if interval is None:
+            self._log.warning(f"Unknown bar spec: {bar_spec_str}")
+            return
 
-        # Process via callback handler
-        self._on_bar(instrument_id, interval, candles)
+        figi = str(instrument_id.symbol)
+        now_ns = self._clock.timestamp_ns()
+        one_day_ns = 86_400_000_000_000  # 24 hours in nanos
+
+        from_ns = _datetime_to_ns(request.start) if request.start else now_ns - one_day_ns * 30
+        to_ns = _datetime_to_ns(request.end) if request.end else now_ns
+        limit = request.limit if request.limit > 0 else 100
+
+        try:
+            candles = await self._client.request_candles(
+                figi=figi,
+                interval=interval,
+                from_ts=from_ns,
+                to_ts=to_ns,
+                limit=limit,
+            )
+
+            self._log.info(f"Got {len(candles)} candles for {figi}")
+
+            if not candles:
+                return
+
+            instrument = self._cache.instrument(instrument_id)
+            price_precision = instrument.price_precision if instrument else 2
+            size_precision = instrument.size_precision if instrument else 0
+
+            bars: list[Bar] = []
+            for candle in candles:
+                open_px = _price_from_quotation(candle.get("open"))
+                high_px = _price_from_quotation(candle.get("high"))
+                low_px = _price_from_quotation(candle.get("low"))
+                close_px = _price_from_quotation(candle.get("close"))
+                volume = float(candle.get("volume", 0))
+                candle_time_s = candle.get("time", 0)
+                ts_event = candle_time_s * 1_000_000_000 if candle_time_s else self._clock.timestamp_ns()
+                ts_init = self._clock.timestamp_ns()
+
+                bar = Bar(
+                    bar_type=bar_type,
+                    open=Price(open_px, price_precision),
+                    high=Price(high_px, price_precision),
+                    low=Price(low_px, price_precision),
+                    close=Price(close_px, price_precision),
+                    volume=Quantity(volume, size_precision),
+                    ts_event=ts_event,
+                    ts_init=ts_init,
+                )
+                bars.append(bar)
+
+            self._handle_bars(
+                bar_type,
+                bars,
+                request.id,
+                request.start,
+                request.end,
+                request.params,
+            )
+
+        except Exception as e:
+            self._log.error(f"Error requesting bars for {instrument_id}: {e}")
+            self._handle_bars(
+                bar_type,
+                [],
+                request.id,
+                request.start,
+                request.end,
+                request.params,
+            )

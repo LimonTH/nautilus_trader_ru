@@ -30,9 +30,7 @@ use crate::stream::native::{
     NativeMarketDataStream, NativeOrderStateStream, NativePortfolioStream, NativePositionsStream,
 };
 
-// -------------------------------------------------------------------------------------------
 // Helper: create an asyncio.Queue and a putter callback
-// -------------------------------------------------------------------------------------------
 
 fn create_async_queue(
     py: Python<'_>,
@@ -78,9 +76,7 @@ fn make_data_callback(
     })
 }
 
-// -------------------------------------------------------------------------------------------
 // PyTInvestMarketDataStream
-// -------------------------------------------------------------------------------------------
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass(module = "nautilus_trader.adapters.tinvest")]
 #[pyo3::pyclass(
@@ -192,9 +188,7 @@ impl Drop for PyTInvestMarketDataStream {
     }
 }
 
-// -------------------------------------------------------------------------------------------
 // PyTInvestOrderStateStream
-// -------------------------------------------------------------------------------------------
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass(module = "nautilus_trader.adapters.tinvest")]
 #[pyo3::pyclass(
@@ -263,9 +257,7 @@ impl Drop for PyTInvestOrderStateStream {
     }
 }
 
-// -------------------------------------------------------------------------------------------
 // PyTInvestPortfolioStream
-// -------------------------------------------------------------------------------------------
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass(module = "nautilus_trader.adapters.tinvest")]
 #[pyo3::pyclass(
@@ -334,9 +326,7 @@ impl Drop for PyTInvestPortfolioStream {
     }
 }
 
-// -------------------------------------------------------------------------------------------
 // PyTInvestPositionsStream
-// -------------------------------------------------------------------------------------------
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass(module = "nautilus_trader.adapters.tinvest")]
 #[pyo3::pyclass(
@@ -405,9 +395,7 @@ impl Drop for PyTInvestPositionsStream {
     }
 }
 
-// -------------------------------------------------------------------------------------------
 // Helper: extract TInvestGrpcClient from Python object
-// -------------------------------------------------------------------------------------------
 
 fn extract_grpc_client(client: &Py<PyAny>) -> PyResult<TInvestGrpcClient> {
     Python::attach(|py| {

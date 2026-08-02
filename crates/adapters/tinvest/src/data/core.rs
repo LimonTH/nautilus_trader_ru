@@ -84,8 +84,6 @@ impl TInvestLiveMarketDataClient {
         }
     }
 
-    // -- helper methods --
-
     /// Spawn an async task and track its handle.
     fn spawn_task<F>(&self, description: &'static str, fut: F)
     where
@@ -111,8 +109,6 @@ impl TInvestLiveMarketDataClient {
             handle.abort();
         }
     }
-
-    // -- public convenience methods --
 
     /// Get the last prices for the given instruments.
     #[allow(deprecated)]

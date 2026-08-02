@@ -64,7 +64,6 @@ pub struct TInvestGrpcClient {
     channel: Arc<RwLock<Option<Channel>>>,
     /// The auth token metadata value.
     auth_header: MetadataValue<Ascii>,
-    // Service stubs (lazily initialized)
     instruments: Arc<RwLock<Option<InstrumentsServiceClient<Channel>>>>,
     market_data: Arc<RwLock<Option<MarketDataServiceClient<Channel>>>>,
     market_data_stream: Arc<RwLock<Option<MarketDataStreamServiceClient<Channel>>>>,
@@ -169,18 +168,9 @@ impl TInvestGrpcClient {
 
     /// Attach auth token to a gRPC request.
     pub fn with_auth<T>(&self, mut request: Request<T>) -> Request<T> {
-        let auth_value = &self.auth_header;
-        // Debug: log first 30 chars to verify token is being sent
-        let auth_str = auth_value.to_str().unwrap_or("<invalid>");
-        let truncated = if auth_str.len() > 30 {
-            format!("{}...", &auth_str[..30])
-        } else {
-            auth_str.to_string()
-        };
-        tracing::debug!("with_auth: inserting authorization header: {truncated}");
         request
             .metadata_mut()
-            .insert("authorization", auth_value.clone());
+            .insert("authorization", self.auth_header.clone());
         request
     }
 
@@ -230,15 +220,12 @@ impl TInvestGrpcClient {
 
     /// Get or create the channel.
     fn get_channel(&self) -> Result<Channel, TInvestClientError> {
-        // Clone the channel from the shared Arc (Channel itself is cheap to clone)
         self.channel
             .try_read()
             .map_err(|_| TInvestClientError::NotConnected)?
             .clone()
             .ok_or(TInvestClientError::NotConnected)
     }
-
-    // --- Service stub accessors ---
 
     pub async fn instruments(
         &self,

@@ -110,8 +110,6 @@ impl TInvestLiveExecutionClient {
         }
     }
 
-    // -- helper methods --
-
     /// Spawn an async task and track its handle.
     fn spawn_task<F>(&self, description: &'static str, fut: F)
     where
@@ -140,8 +138,6 @@ impl TInvestLiveExecutionClient {
             handle.abort();
         }
     }
-
-    // -- public convenience methods --
 
     /// Get the current portfolio for the given account.
     ///
@@ -472,7 +468,7 @@ impl ExecutionClient for TInvestLiveExecutionClient {
                     stop_price,
                     direction: side,
                     account_id: account_id.clone(),
-                    expiration_type: 1, // STOP_ORDER_EXPIRATION_TYPE_GOOD_TILL_CANCEL
+                    expiration_type: 1,
                     stop_order_type,
                     instrument_id: figi.clone(),
                     order_id: client_order_id.to_string(),
@@ -717,8 +713,8 @@ impl ExecutionClient for TInvestLiveExecutionClient {
         let request = crate::proto::GetOrderStateRequest {
             account_id: account_id_str,
             order_id,
-            price_type: 1,          // PRICE_TYPE_POINT
-            order_id_type: Some(1), // ORDER_ID_TYPE_EXCHANGE
+            price_type: 1,
+            order_id_type: Some(1),
         };
         let request = self.grpc_client.with_auth(tonic::Request::new(request));
 

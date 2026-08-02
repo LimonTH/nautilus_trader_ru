@@ -273,9 +273,7 @@ macro_rules! define_server_side_stream {
     };
 }
 
-// -------------------------------------------------------------------------------------------
 // Generated server-side stream types
-// -------------------------------------------------------------------------------------------
 
 define_server_side_stream!(
     (account_id)
@@ -327,9 +325,7 @@ define_server_side_stream!(
     "Market data server-side"
 );
 
-// -------------------------------------------------------------------------------------------
 // Manually maintained stream types (bidirectional / reconnect)
-// -------------------------------------------------------------------------------------------
 
 /// Manages a bidirectional stream for real-time market data.
 #[derive(Debug)]
@@ -420,7 +416,7 @@ impl TInvestMarketDataStream {
                             figi: String::new(),
                             instrument_id: instrument_id.to_string(),
                         }],
-                        trade_source: 3, // TRADE_SOURCE_ALL
+                        trade_source: 3,
                         with_open_interest: false,
                     },
                 ),
@@ -452,7 +448,7 @@ impl TInvestMarketDataStream {
                             figi: String::new(),
                             instrument_id: instrument_id.to_string(),
                         }],
-                        trade_source: 3, // TRADE_SOURCE_ALL
+                        trade_source: 3,
                         with_open_interest: false,
                     },
                 ),
@@ -488,7 +484,7 @@ impl TInvestMarketDataStream {
                             figi: String::new(),
                             depth,
                             instrument_id: instrument_id.to_string(),
-                            order_book_type: 1, // ORDERBOOK_TYPE_ALL
+                            order_book_type: 1,
                         }],
                     },
                 ),
@@ -524,7 +520,7 @@ impl TInvestMarketDataStream {
                             figi: String::new(),
                             depth,
                             instrument_id: instrument_id.to_string(),
-                            order_book_type: 1, // ORDERBOOK_TYPE_ALL
+                            order_book_type: 1,
                         }],
                     },
                 ),

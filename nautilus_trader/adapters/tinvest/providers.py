@@ -35,16 +35,12 @@ from nautilus_trader.model.objects import Currency
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 
+from nautilus_trader.adapters.tinvest.constants import _DEFAULT_PRICE_PRECISION
+from nautilus_trader.adapters.tinvest.constants import _DEFAULT_PRICE_INCREMENT
+from nautilus_trader.adapters.tinvest.constants import _INSTRUMENT_TYPE_TO_ASSET_CLASS
+from nautilus_trader.adapters.tinvest.constants import _MAX_PRECISION
+
 logger = logging.getLogger(__name__)
-
-# Default price precision / increment for T-Invest instruments.
-# Russian equities trade in RUB with 2 decimal places (copecks).
-_DEFAULT_PRICE_PRECISION = 2
-_DEFAULT_PRICE_INCREMENT = Price.from_str("0.01")
-
-# The maximum fixed-point precision from the Rust layer.
-# Matches FIXED_PRECISION in high-precision mode (16).
-_MAX_PRECISION = 16
 
 
 def _compute_price_precision(min_price_increment: dict | None) -> tuple[int, Price]:
@@ -100,17 +96,6 @@ def _compute_price_precision(min_price_increment: dict | None) -> tuple[int, Pri
         precision = _MAX_PRECISION
 
     return precision, Price(value, precision)
-
-# Map T-Invest instrument_type → nautilus AssetClass enum
-_INSTRUMENT_TYPE_TO_ASSET_CLASS: dict[str, AssetClass] = {
-    "share": AssetClass.EQUITY,
-    "bond": AssetClass.DEBT,
-    "etf": AssetClass.EQUITY,
-    "future": AssetClass.INDEX,
-    "option": AssetClass.EQUITY,
-    "currency": AssetClass.FX,
-}
-
 
 def _try_dict_to_instrument(inst: dict[str, Any]) -> Instrument | None:
     """
@@ -334,7 +319,7 @@ def _option_dict_to_contract(
 
         # --- Underlying asset ---
         underlying_str = inst.get("basic_asset", "") or raw_symbol.to_string()
-        underlying = raw_symbol.__class__(underlying_str)
+        underlying = underlying_str
 
         # --- Expiration ---
         expiration_seconds = int(inst.get("expiration_date", 0) or 0)
@@ -347,7 +332,7 @@ def _option_dict_to_contract(
         return OptionContract(
             instrument_id=instrument_id,
             raw_symbol=raw_symbol,
-            asset_class="EQUITY",
+            asset_class=AssetClass.EQUITY,
             exchange=exchange if exchange else None,
             underlying=underlying,
             option_kind=option_kind,

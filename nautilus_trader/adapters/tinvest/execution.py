@@ -71,40 +71,10 @@ from nautilus_trader.model.objects import Price as ModelPrice
 from nautilus_trader.model.objects import Money as ModelMoney
 
 
-# Map T-Invest direction to nautilus OrderSide
-_TINVEST_DIRECTION_TO_SIDE = {
-    1: OrderSide.BUY,
-    2: OrderSide.SELL,
-}
-
-# Map T-Invest execution_report_status to nautilus OrderStatus
-_TINVEST_STATUS_TO_ORDER_STATUS = {
-    0: OrderStatus.INITIALIZED,
-    1: OrderStatus.FILLED,
-    2: OrderStatus.REJECTED,
-    3: OrderStatus.CANCELED,
-    4: OrderStatus.ACCEPTED,
-    5: OrderStatus.PARTIALLY_FILLED,
-    6: OrderStatus.PENDING_CANCEL,
-    7: OrderStatus.EXPIRED,
-}
-
-# Map T-Invest order_type to nautilus OrderType
-# ORDER_TYPE_BESTPRICE (3) has no direct Nautilus equivalent; it behaves like
-# a market order (aggressive fill at the best available price).
-_TINVEST_ORDER_TYPE = {
-    1: OrderType.LIMIT,
-    2: OrderType.MARKET,
-    3: OrderType.MARKET,
-}
-
-# Nautilus order types that are routed to T-Invest PostStopOrder (F3)
-_STOP_ORDER_TYPES = {
-    OrderType.STOP_MARKET,
-    OrderType.STOP_LIMIT,
-    OrderType.MARKET_IF_TOUCHED,
-    OrderType.LIMIT_IF_TOUCHED,
-}
+from nautilus_trader.adapters.tinvest.constants import _TINVEST_DIRECTION_TO_SIDE
+from nautilus_trader.adapters.tinvest.constants import _TINVEST_STATUS_TO_ORDER_STATUS
+from nautilus_trader.adapters.tinvest.constants import _TINVEST_ORDER_TYPE
+from nautilus_trader.adapters.tinvest.constants import _STOP_ORDER_TYPES
 
 
 def _safe_extract_price(raw, default_precision: int = 2) -> "ModelPrice":
@@ -432,6 +402,7 @@ class TInvestExecutionClient(LiveExecutionClient):
                     instrument_id=self._parse_instrument_id(figi),
                     position_side=side,
                     quantity=ModelQuantity(abs(balance), 0),
+                    report_id=UUID4(),
                     ts_init=ts_init,
                     ts_last=ts_init,
                 )
@@ -448,6 +419,7 @@ class TInvestExecutionClient(LiveExecutionClient):
                     instrument_id=self._parse_instrument_id(figi),
                     position_side=side,
                     quantity=ModelQuantity(abs(balance), 0),
+                    report_id=UUID4(),
                     ts_init=ts_init,
                     ts_last=ts_init,
                 )
@@ -493,7 +465,7 @@ class TInvestExecutionClient(LiveExecutionClient):
 
     async def _submit_order(self, command: SubmitOrder) -> None:
         figi = str(command.instrument_id.symbol)
-        side = command.order.order_side
+        side = command.order.side
         qty = command.order.quantity
         order_type = command.order.order_type
         client_order_id = command.client_order_id
@@ -515,7 +487,7 @@ class TInvestExecutionClient(LiveExecutionClient):
         tinvest_type = self._map_order_type(order_type, command.instrument_id)
         price = None
         if order_type == OrderType.LIMIT and command.order.price is not None:
-            price = float(command.order.price.as_f64())
+            price = float(command.order.price.as_double())
 
         self._log.info(
             f"Submitting order: figi={figi}, side={side}, qty={qty}, "
@@ -654,10 +626,10 @@ class TInvestExecutionClient(LiveExecutionClient):
         client_order_id = command.client_order_id
 
         trigger_price = (
-            float(order.trigger_price.as_f64()) if order.trigger_price is not None else None
+            float(order.trigger_price.as_double()) if order.trigger_price is not None else None
         )
         limit_price = (
-            float(order.price.as_f64()) if order.price is not None else None
+            float(order.price.as_double()) if order.price is not None else None
         )
 
         # Map Nautilus stop type → T-Invest (stop_order_type, exchange_order_type)
@@ -739,9 +711,9 @@ class TInvestExecutionClient(LiveExecutionClient):
 
     async def _submit_order_list(self, command: SubmitOrderList) -> None:
         self._log.info(
-            f"Submitting order list with {len(command.orders)} orders",
+            f"Submitting order list with {len(command.order_list.orders)} orders",
         )
-        for order in command.orders:
+        for order in command.order_list.orders:
             try:
                 await self._submit_order(order)
             except Exception as e:
@@ -756,7 +728,7 @@ class TInvestExecutionClient(LiveExecutionClient):
             idempotency_key = str(command.client_order_id)
 
             quantity = int(command.quantity) if command.quantity else 0
-            price = float(command.price.as_f64()) if command.price else None
+            price = float(command.price.as_double()) if command.price else None
 
             if quantity <= 0:
                 self._log.warning(
@@ -1025,6 +997,8 @@ class TInvestExecutionClient(LiveExecutionClient):
                 order_status=order_status,
                 quantity=ModelQuantity(lots_requested, 0),
                 filled_qty=ModelQuantity(0, 0),
+                report_id=UUID4(),
+                ts_accepted=ts_init,
                 ts_init=ts_init,
                 ts_last=ts_init,
             )
@@ -1146,6 +1120,8 @@ class TInvestExecutionClient(LiveExecutionClient):
             order_status=order_status,
             quantity=ModelQuantity(lots_requested, 0),
             filled_qty=ModelQuantity(lots_executed, 0),
+            report_id=UUID4(),
+            ts_accepted=ts_init,
             ts_init=ts_init,
             ts_last=ts_init,
         )

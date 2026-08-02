@@ -32,9 +32,7 @@ use crate::python::stream::{
     PyTInvestPositionsStream,
 };
 
-// ---------------------------------------------------------------------------
 // Factory extractors (bridges from Python PyAny to Rust trait objects)
-// ---------------------------------------------------------------------------
 
 #[expect(clippy::needless_pass_by_value)]
 fn extract_tinvest_data_factory(

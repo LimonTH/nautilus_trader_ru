@@ -109,8 +109,6 @@ impl TInvestSandboxExecutionClient {
         }
     }
 
-    // -- helper methods --
-
     /// Spawn an async task and track its handle.
     fn spawn_task<F>(&self, description: &'static str, fut: F)
     where
@@ -139,8 +137,6 @@ impl TInvestSandboxExecutionClient {
             handle.abort();
         }
     }
-
-    // -- sandbox-specific public methods --
 
     /// Deposit funds into the sandbox account (SandboxPayIn).
     pub async fn sandbox_pay_in(&self, currency: &str, amount: f64) -> anyhow::Result<()> {
@@ -204,7 +200,6 @@ impl TInvestSandboxExecutionClient {
         Ok(Some(positions))
     }
 
-    /// Get the last prices for the given instruments via MarketDataService.
     #[allow(deprecated)]
     pub async fn sandbox_get_last_prices(
         &self,

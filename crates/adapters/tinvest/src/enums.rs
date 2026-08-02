@@ -95,18 +95,18 @@ pub fn order_direction_to_order_side(direction: i32) -> &'static str {
 /// Mapping from Nautilus order side to T-Invest OrderDirection.
 pub fn order_side_to_order_direction(side: &str) -> i32 {
     match side {
-        "BUY" => 1,  // ORDER_DIRECTION_BUY
-        "SELL" => 2, // ORDER_DIRECTION_SELL
-        _ => 1,      // BUY
+        "BUY" => 1,
+        "SELL" => 2,
+        _ => 1,
     }
 }
 
 /// Mapping from T-Invest OrderType to Nautilus order type string.
 pub fn order_type_to_nautilus(order_type: i32) -> &'static str {
     match order_type {
-        1 => "LIMIT",  // ORDER_TYPE_LIMIT
-        2 => "MARKET", // ORDER_TYPE_MARKET
-        3 => "LIMIT",  // ORDER_TYPE_BESTPRICE
+        1 => "LIMIT",
+        2 => "MARKET",
+        3 => "LIMIT",
         _ => "LIMIT",
     }
 }

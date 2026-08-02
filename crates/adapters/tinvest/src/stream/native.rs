@@ -40,9 +40,7 @@ use crate::proto::{
     market_data_request,
 };
 
-// -------------------------------------------------------------------------------------------
 // Helper: convert proto responses to Python dicts (called from within GIL)
-// -------------------------------------------------------------------------------------------
 
 fn money_value_to_dict<'py>(
     py: Python<'py>,
@@ -352,9 +350,7 @@ fn positions_stream_response_to_dict<'py>(
     Ok(d)
 }
 
-// -------------------------------------------------------------------------------------------
 // MarketDataStream — bidirectional gRPC stream running in a dedicated std::thread
-// -------------------------------------------------------------------------------------------
 
 /// A native bidirectional market data stream running in a dedicated OS thread
 /// with its own tokio runtime. Converts incoming proto messages to Python dicts
@@ -677,9 +673,7 @@ impl Drop for NativeMarketDataStream {
     }
 }
 
-// -------------------------------------------------------------------------------------------
 // Macro: server-side stream with dedicated std::thread
-// -------------------------------------------------------------------------------------------
 
 macro_rules! define_native_server_stream {
     (
@@ -828,9 +822,7 @@ macro_rules! define_native_server_stream {
     };
 }
 
-// -------------------------------------------------------------------------------------------
 // Generated server-side stream types
-// -------------------------------------------------------------------------------------------
 
 define_native_server_stream!(
     pub NativeOrderStateStream,

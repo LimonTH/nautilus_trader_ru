@@ -27,9 +27,7 @@ use crate::client::TInvestGrpcClient;
 use crate::config::TInvestClientConfig;
 use crate::proto;
 
-// ---------------------------------------------------------------------------
 // Helper functions: convert proto types to Python dicts
-// ---------------------------------------------------------------------------
 
 fn quotation_to_dict<'a>(py: Python<'a>, q: &'a proto::Quotation) -> PyResult<Bound<'a, PyDict>> {
     let d = PyDict::new(py);
@@ -154,9 +152,7 @@ fn order_state_to_dict<'a>(
     Ok(d)
 }
 
-// ---------------------------------------------------------------------------
 // Helper: InstrumentShort proto → Python dict
-// ---------------------------------------------------------------------------
 
 fn instrument_short_to_dict<'a>(
     py: Python<'a>,
@@ -195,9 +191,7 @@ fn instrument_short_to_dict<'a>(
     Ok(d)
 }
 
-// ---------------------------------------------------------------------------
 // Helper: convert a Share/Bond/Future/Etf/Currency proto to a generic Python dict
-// ---------------------------------------------------------------------------
 
 fn share_to_dict<'a>(py: Python<'a>, s: &'a proto::Share) -> PyResult<Bound<'a, PyDict>> {
     let d = PyDict::new(py);
@@ -325,9 +319,7 @@ fn option_to_dict<'a>(py: Python<'a>, o: &'a proto::Option) -> PyResult<Bound<'a
     Ok(d)
 }
 
-// ---------------------------------------------------------------------------
 // Helper: Instrument proto → Python dict (used by GetInstrumentBy)
-// ---------------------------------------------------------------------------
 
 fn instrument_to_dict<'py>(
     py: Python<'py>,
@@ -358,9 +350,7 @@ fn instrument_to_dict<'py>(
     Ok(d)
 }
 
-// ---------------------------------------------------------------------------
 // PyTInvestGrpcClient
-// ---------------------------------------------------------------------------
 
 /// Python wrapper around TInvestGrpcClient.
 #[pyo3_stub_gen::derive::gen_stub_pyclass(module = "nautilus_trader.adapters.tinvest")]
@@ -377,9 +367,7 @@ pub struct PyTInvestGrpcClient {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PyTInvestGrpcClient {
-    // -----------------------------------------------------------------------
     // Constructor / lifecycle
-    // -----------------------------------------------------------------------
 
     #[new]
     pub fn py_new(config: TInvestClientConfig) -> PyResult<Self> {
@@ -411,9 +399,7 @@ impl PyTInvestGrpcClient {
         self.inner.is_connected()
     }
 
-    // -----------------------------------------------------------------------
     // Data methods (6)
-    // -----------------------------------------------------------------------
 
     /// Load all instruments from T-Invest: shares, bonds, futures, ETFs, currencies.
     pub fn request_instruments<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
@@ -424,7 +410,7 @@ impl PyTInvestGrpcClient {
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("instruments service: {e}")))?;
             let request = proto::InstrumentsRequest {
-                instrument_status: Some(1), // INSTRUMENT_STATUS_BASE
+                instrument_status: Some(1),
                 instrument_exchange: None,
             };
 
@@ -445,7 +431,7 @@ impl PyTInvestGrpcClient {
                                 name: s.name.clone(),
                                 uid: s.uid.clone(),
                                 position_uid: s.position_uid.clone(),
-                                instrument_kind: 2, // INSTRUMENT_TYPE_SHARE
+                                instrument_kind: 2,
                                 api_trade_available_flag: s.api_trade_available_flag,
                                 for_iis_flag: s.for_iis_flag,
                                 first_1min_candle_date: s.first_1min_candle_date,
@@ -478,7 +464,7 @@ impl PyTInvestGrpcClient {
                                 name: b.name.clone(),
                                 uid: b.uid.clone(),
                                 position_uid: b.position_uid.clone(),
-                                instrument_kind: 1, // INSTRUMENT_TYPE_BOND
+                                instrument_kind: 1,
                                 api_trade_available_flag: b.api_trade_available_flag,
                                 for_iis_flag: b.for_iis_flag,
                                 first_1min_candle_date: b.first_1min_candle_date,
@@ -511,7 +497,7 @@ impl PyTInvestGrpcClient {
                                 name: f.name.clone(),
                                 uid: f.uid.clone(),
                                 position_uid: f.position_uid.clone(),
-                                instrument_kind: 5, // INSTRUMENT_TYPE_FUTURES
+                                instrument_kind: 5,
                                 api_trade_available_flag: f.api_trade_available_flag,
                                 for_iis_flag: f.for_iis_flag,
                                 first_1min_candle_date: f.first_1min_candle_date,
@@ -544,7 +530,7 @@ impl PyTInvestGrpcClient {
                                 name: et.name.clone(),
                                 uid: et.uid.clone(),
                                 position_uid: et.position_uid.clone(),
-                                instrument_kind: 4, // INSTRUMENT_TYPE_ETF
+                                instrument_kind: 4,
                                 api_trade_available_flag: et.api_trade_available_flag,
                                 for_iis_flag: et.for_iis_flag,
                                 first_1min_candle_date: et.first_1min_candle_date,
@@ -577,7 +563,7 @@ impl PyTInvestGrpcClient {
                                 name: c.name.clone(),
                                 uid: c.uid.clone(),
                                 position_uid: c.position_uid.clone(),
-                                instrument_kind: 3, // INSTRUMENT_TYPE_CURRENCY
+                                instrument_kind: 3,
                                 api_trade_available_flag: c.api_trade_available_flag,
                                 for_iis_flag: c.for_iis_flag,
                                 first_1min_candle_date: c.first_1min_candle_date,
@@ -611,7 +597,7 @@ impl PyTInvestGrpcClient {
                                 name: o.name.clone(),
                                 uid: o.uid.clone(),
                                 position_uid: o.position_uid.clone(),
-                                instrument_kind: 6, // INSTRUMENT_TYPE_OPTION
+                                instrument_kind: 6,
                                 api_trade_available_flag: o.api_trade_available_flag,
                                 for_iis_flag: o.for_iis_flag,
                                 first_1min_candle_date: o.first_1min_candle_date,
@@ -1117,9 +1103,7 @@ impl PyTInvestGrpcClient {
         })
     }
 
-    // -----------------------------------------------------------------------
     // Execution methods (4)
-    // -----------------------------------------------------------------------
 
     /// Post a new order.
     #[allow(deprecated)]
@@ -1155,8 +1139,8 @@ impl PyTInvestGrpcClient {
                 order_type,
                 order_id: order_id.clone(),
                 instrument_id: figi.clone(),
-                time_in_force: 1, // TIME_IN_FORCE_DAY
-                price_type: 2,    // PRICE_TYPE_CURRENCY
+                time_in_force: 1,
+                price_type: 2,
                 confirm_margin_trade: false,
             };
             let req = inner.with_auth(tonic::Request::new(request));
@@ -1306,7 +1290,7 @@ impl PyTInvestGrpcClient {
             let request = proto::CancelOrderRequest {
                 account_id: account_id.clone(),
                 order_id: order_id.clone(),
-                order_id_type: Some(1), // ORDER_ID_TYPE_EXCHANGE
+                order_id_type: Some(1),
             };
             let req = inner.with_auth(tonic::Request::new(request));
             let response = orders
@@ -1356,12 +1340,12 @@ impl PyTInvestGrpcClient {
             });
             let request = proto::ReplaceOrderRequest {
                 account_id: account_id.clone(),
-                order_id_type: Some(1), // ORDER_ID_TYPE_EXCHANGE
+                order_id_type: Some(1),
                 order_id: order_id.clone(),
                 idempotency_key: idempotency_key.clone(),
                 quantity,
                 price: price_quotation,
-                price_type: Some(2), // PRICE_TYPE_CURRENCY
+                price_type: Some(2),
                 confirm_margin_trade: false,
             };
             let req = inner.with_auth(tonic::Request::new(request));
@@ -1453,8 +1437,8 @@ impl PyTInvestGrpcClient {
             let request = proto::GetOrderStateRequest {
                 account_id: account_id.clone(),
                 order_id: order_id.clone(),
-                price_type: 1,          // PRICE_TYPE_POINT
-                order_id_type: Some(1), // ORDER_ID_TYPE_EXCHANGE
+                price_type: 1,
+                order_id_type: Some(1),
             };
             let req = inner.with_auth(tonic::Request::new(request));
             let response = orders
@@ -1505,9 +1489,7 @@ impl PyTInvestGrpcClient {
         })
     }
 
-    // -----------------------------------------------------------------------
     // Stop-order methods (3)
-    // -----------------------------------------------------------------------
 
     /// Post a stop-order.
     #[pyo3(signature = (account_id, figi, quantity, order_id, price=None, stop_price=None, direction=1, expiration_type=1, stop_order_type=1, exchange_order_type=0, take_profit_type=0))]
@@ -1814,9 +1796,7 @@ impl PyTInvestGrpcClient {
         })
     }
 
-    // -----------------------------------------------------------------------
     // Sandbox methods (3)
-    // -----------------------------------------------------------------------
 
     /// Open a sandbox account.
     #[pyo3(signature = (name=None))]
@@ -1931,9 +1911,7 @@ impl PyTInvestGrpcClient {
         })
     }
 
-    // -----------------------------------------------------------------------
     // Portfolio / positions / operations (3)
-    // -----------------------------------------------------------------------
 
     /// Get portfolio for an account.
     #[pyo3(signature = (account_id))]
@@ -2774,9 +2752,7 @@ impl PyTInvestGrpcClient {
         })
     }
 
-    // -----------------------------------------------------------------------
     // Sandbox methods (F14) — full SandboxService surface
-    // -----------------------------------------------------------------------
 
     /// Get sandbox accounts.
     pub fn get_sandbox_accounts<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
@@ -3437,9 +3413,7 @@ impl PyTInvestGrpcClient {
         })
     }
 
-    // -----------------------------------------------------------------------
     // Native streaming (future enhancement)
-    // -----------------------------------------------------------------------
     // TODO: Native gRPC streaming via PyO3
     //
     // The Rust stream module (crate::stream::core) provides full native gRPC
@@ -3479,9 +3453,7 @@ impl PyTInvestGrpcClient {
     }
 }
 
-// ---------------------------------------------------------------------------
 // OperationType enum → string helper
-// ---------------------------------------------------------------------------
 
 fn operation_type_to_str(ot: i32) -> &'static str {
     match ot {

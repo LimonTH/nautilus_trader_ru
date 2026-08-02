@@ -82,12 +82,9 @@ pub fn quotation_to_decimal(q: &crate::proto::Quotation) -> Decimal {
 pub fn f64_to_quotation(value: f64) -> crate::proto::Quotation {
     let units = value.trunc() as i64;
     let nano = (value.fract() * 1_000_000_000.0).round() as i32;
-    // Normalise: if units is negative and nano is non-zero, borrow 1 from units
-    // to keep nano positive, matching the proto convention (nano >= 0).
     let (units, nano) = if nano < 0 {
         (units - 1, nano + 1_000_000_000)
     } else if units <= 0 && nano > 0 {
-        // nano should not be positive when units is negative, but handle anyway
         (units + 1, nano - 1_000_000_000)
     } else {
         (units, nano)
@@ -544,7 +541,6 @@ pub fn convert_trade_to_trade_data(trade: &crate::proto::Trade) -> (Price, Quant
         .as_ref()
         .map(timestamp_to_unix_nanos)
         .unwrap_or(0);
-    // TRADE_DIRECTION_BUY = 1, TRADE_DIRECTION_SELL = 2
     let side = trade.direction == 1;
 
     (price, quantity, ts, side)
@@ -574,8 +570,8 @@ pub fn order_side_from_tinvest(direction: i32) -> &'static str {
 /// Convert nautilus OrderSide to T-Invest OrderDirection.
 pub fn order_side_to_tinvest(side: &str) -> i32 {
     match side {
-        "BUY" => 1,  // ORDER_DIRECTION_BUY
-        "SELL" => 2, // ORDER_DIRECTION_SELL
+        "BUY" => 1,
+        "SELL" => 2,
         _ => 1,
     }
 }
@@ -587,9 +583,9 @@ pub fn order_side_to_tinvest(side: &str) -> i32 {
 /// caller explicitly passes `"BESTPRICE"` we map to `ORDER_TYPE_BESTPRICE`.
 pub fn order_type_to_tinvest(order_type: &str) -> i32 {
     match order_type {
-        "LIMIT" => 1,     // ORDER_TYPE_LIMIT
-        "MARKET" => 2,    // ORDER_TYPE_MARKET
-        "BESTPRICE" => 3, // ORDER_TYPE_BESTPRICE
+        "LIMIT" => 1,
+        "MARKET" => 2,
+        "BESTPRICE" => 3,
         _ => 1,
     }
 }
@@ -601,9 +597,9 @@ pub fn order_type_to_tinvest(order_type: &str) -> i32 {
 /// mapped to `"MARKET"`.
 pub fn order_type_from_tinvest(order_type: i32) -> &'static str {
     match order_type {
-        1 => "LIMIT",  // ORDER_TYPE_LIMIT
-        2 => "MARKET", // ORDER_TYPE_MARKET
-        3 => "MARKET", // ORDER_TYPE_BESTPRICE — map to MARKET
+        1 => "LIMIT",
+        2 => "MARKET",
+        3 => "MARKET",
         _ => "LIMIT",
     }
 }
@@ -631,8 +627,8 @@ pub fn convert_order_state_to_report(
     };
 
     let order_side = match order.direction {
-        1 => OrderSide::Buy,  // ORDER_DIRECTION_BUY
-        2 => OrderSide::Sell, // ORDER_DIRECTION_SELL
+        1 => OrderSide::Buy,
+        2 => OrderSide::Sell,
         _ => OrderSide::Buy,
     };
 
@@ -767,9 +763,9 @@ pub fn convert_operation_item_to_fill_reports(
                 last_qty,
                 last_px,
                 commission,
-                LiquiditySide::Taker, // Not available in OperationItem
-                None,                 // client_order_id
-                None,                 // venue_position_id
+                LiquiditySide::Taker,
+                None,
+                None,
                 ts_event,
                 ts_init,
                 None,
@@ -886,9 +882,7 @@ pub fn convert_futures_position_to_report(
     )
 }
 
-// -------------------------------------------------------------------------------------------
 // Stream-data → Nautilus event conversion helpers
-// -------------------------------------------------------------------------------------------
 
 /// Convert a T-Invest proto [`Trade`](crate::proto::Trade) to a Nautilus [`TradeTick`].
 pub fn convert_proto_trade_to_tick(
@@ -899,8 +893,8 @@ pub fn convert_proto_trade_to_tick(
     let price = quotation_to_price(&trade.price.unwrap_or_default(), 2);
     let size = Quantity::new(trade.quantity as f64, 0);
     let aggressor_side = match trade.direction {
-        1 => AggressorSide::Buyer,  // TRADE_DIRECTION_BUY
-        2 => AggressorSide::Seller, // TRADE_DIRECTION_SELL
+        1 => AggressorSide::Buyer,
+        2 => AggressorSide::Seller,
         _ => AggressorSide::NoAggressor,
     };
     let trade_id = TradeId::new(&format!(
