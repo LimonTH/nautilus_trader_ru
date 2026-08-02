@@ -1120,6 +1120,61 @@ impl PyTInvestGrpcClient {
         })
     }
 
+    /// Submit an order asynchronously (PostOrderAsync).
+    ///
+    /// Returns immediately with an idempotency ``order_request_id`` and the
+    /// initial ``execution_report_status``; the final order state is delivered
+    /// via the order state stream or polled with ``get_order_state``.
+    #[pyo3(signature = (account_id, figi, quantity, price=None, direction=1, order_type=2, order_id=""))]
+    pub fn post_order_async<'py>(
+        &mut self,
+        py: Python<'py>,
+        account_id: String,
+        figi: String,
+        quantity: i64,
+        price: Option<f64>,
+        direction: i32,
+        order_type: i32,
+        order_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let mut orders = inner.orders().await.map_err(|e| {
+                PyRuntimeError::new_err(format!("orders service: {e}"))
+            })?;
+            let price_quotation = price.map(|p| {
+                let units = p.trunc() as i64;
+                let nano = ((p.fract() * 1_000_000_000.0).round()) as i32;
+                proto::Quotation { units, nano }
+            });
+            let request = proto::PostOrderAsyncRequest {
+                instrument_id: figi.clone(),
+                quantity,
+                price: price_quotation,
+                direction,
+                account_id: account_id.clone(),
+                order_type,
+                order_id: order_id.clone(),
+                time_in_force: None,
+                price_type: None,
+                confirm_margin_trade: false,
+            };
+            let req = inner.with_auth(tonic::Request::new(request));
+            let response = orders.post_order_async(req).await.map_err(|e| {
+                PyRuntimeError::new_err(format!("post_order_async: {e}"))
+            })?;
+            let resp = response.into_inner();
+
+            Python::attach(|py| {
+                let d = PyDict::new(py);
+                d.set_item("order_request_id", &resp.order_request_id)?;
+                d.set_item("execution_report_status", resp.execution_report_status)?;
+                d.set_item("trade_intent_id", resp.trade_intent_id)?;
+                Ok(d.into_any().unbind())
+            })
+        })
+    }
+
     /// Cancel an existing order.
     #[pyo3(signature = (account_id, order_id))]
     pub fn cancel_order<'py>(

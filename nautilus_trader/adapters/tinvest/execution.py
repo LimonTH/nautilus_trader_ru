@@ -90,9 +90,12 @@ _TINVEST_STATUS_TO_ORDER_STATUS = {
 }
 
 # Map T-Invest order_type to nautilus OrderType
+# ORDER_TYPE_BESTPRICE (3) has no direct Nautilus equivalent; it behaves like
+# a market order (aggressive fill at the best available price).
 _TINVEST_ORDER_TYPE = {
     1: OrderType.LIMIT,
     2: OrderType.MARKET,
+    3: OrderType.MARKET,
 }
 
 
@@ -485,35 +488,53 @@ class TInvestExecutionClient(LiveExecutionClient):
         side = command.order.order_side
         qty = command.order.quantity
         order_type = command.order.order_type
+        client_order_id = command.client_order_id
 
         # Map side to T-Invest direction
         direction = 1 if side == OrderSide.BUY else 2
 
-        # Map order type to T-Invest type
-        tinvest_type = 2  # default MARKET
+        # Map order type to T-Invest type (1=Limit, 2=Market, 3=BestPrice)
+        tinvest_type = self._map_order_type(order_type, command.instrument_id)
         price = None
-        if order_type == OrderType.LIMIT:
-            tinvest_type = 1
-            if command.order.price is not None:
-                price = float(command.order.price.as_f64())
+        if order_type == OrderType.LIMIT and command.order.price is not None:
+            price = float(command.order.price.as_f64())
 
         self._log.info(
-            f"Submitting order: figi={figi}, side={side}, qty={qty}, type={order_type}",
+            f"Submitting order: figi={figi}, side={side}, qty={qty}, "
+            f"type={order_type}, tinvest_type={tinvest_type}, "
+            f"async={self._config.use_async_orders}",
         )
 
         try:
-            result = await self._client.post_order(
-                account_id=self._account_str,
-                figi=figi,
-                quantity=int(float(qty)),
-                price=price,
-                direction=direction,
-                order_type=tinvest_type,
-                order_id=str(command.client_order_id),
-            )
+            if self._config.use_async_orders:
+                # F2: fire-and-forget submission — no blocking wait for the
+                # exchange response; order state arrives via stream/polling.
+                result = await self._client.post_order_async(
+                    account_id=self._account_str,
+                    figi=figi,
+                    quantity=int(float(qty)),
+                    price=price,
+                    direction=direction,
+                    order_type=tinvest_type,
+                    order_id=str(client_order_id),
+                )
+            else:
+                result = await self._client.post_order(
+                    account_id=self._account_str,
+                    figi=figi,
+                    quantity=int(float(qty)),
+                    price=price,
+                    direction=direction,
+                    order_type=tinvest_type,
+                    order_id=str(client_order_id),
+                )
 
             if result is not None:
-                venue_order_id = result.get("order_id", "")
+                # Async responses carry order_request_id (idempotency key)
+                # instead of a venue order_id until the order is accepted.
+                venue_order_id = result.get("order_id", "") or result.get(
+                    "order_request_id", "",
+                )
                 exec_status = result.get("execution_report_status")
                 self._log.info(
                     f"Order submitted: venue_order_id={venue_order_id}, "
@@ -523,13 +544,13 @@ class TInvestExecutionClient(LiveExecutionClient):
 
                 # Generate event for order submitted
                 self.generate_order_submitted(
-                    client_order_id=command.client_order_id,
+                    client_order_id=client_order_id,
                     ts_event=self._clock.timestamp_ns(),
                 )
 
                 # Generate order accepted
                 self.generate_order_accepted(
-                    client_order_id=command.client_order_id,
+                    client_order_id=client_order_id,
                     venue_order_id=VenueOrderId(venue_order_id),
                     ts_event=self._clock.timestamp_ns(),
                 )
@@ -538,7 +559,7 @@ class TInvestExecutionClient(LiveExecutionClient):
                 if exec_status == 1:  # FILLED
                     lots_executed = result.get("lots_executed", 0)
                     self.generate_order_filled(
-                        client_order_id=command.client_order_id,
+                        client_order_id=client_order_id,
                         venue_order_id=VenueOrderId(venue_order_id),
                         venue_position_id=None,
                         fill_quantity=ModelQuantity(float(lots_executed), 0),
@@ -550,10 +571,46 @@ class TInvestExecutionClient(LiveExecutionClient):
         except Exception as e:
             self._log.error(f"Failed to submit order: {e}")
             self.generate_order_rejected(
-                client_order_id=command.client_order_id,
+                client_order_id=client_order_id,
                 reason=str(e),
                 ts_event=self._clock.timestamp_ns(),
             )
+
+    def _map_order_type(self, order_type: OrderType, instrument_id: object) -> int:
+        """Map a Nautilus OrderType to a T-Invest order type integer.
+
+        T-Invest order types: 1=Limit, 2=Market, 3=BestPrice.
+
+        Options only support limit orders — any other type is forced to limit
+        (F1 validation).
+
+        Returns
+        -------
+        int
+            The T-Invest order type integer.
+
+        """
+        # Options: only limit orders are allowed (F1 validation)
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is not None and self._is_option_instrument(instrument):
+            self._log.warning(
+                f"Options only support limit orders; forcing LIMIT for {instrument_id}",
+            )
+            return 1
+
+        if order_type == OrderType.LIMIT:
+            return 1
+        if order_type == OrderType.MARKET:
+            return 3 if self._config.use_bestprice_orders else 2
+        # Default to market for unsupported types
+        return 2
+
+    @staticmethod
+    def _is_option_instrument(instrument: object) -> bool:
+        """Return True if the cached instrument is an option contract."""
+        from nautilus_trader.model.instruments import OptionContract
+
+        return isinstance(instrument, OptionContract)
 
     async def _submit_order_list(self, command: SubmitOrderList) -> None:
         self._log.info(

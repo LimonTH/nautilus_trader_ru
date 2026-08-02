@@ -591,6 +591,59 @@ class TInvestGrpcClient:
         logger.warning("post_order: native client not available")
         return None
 
+    async def post_order_async(
+        self,
+        account_id: str,
+        figi: str,
+        quantity: int,
+        price: float | None = None,
+        direction: int = 1,
+        order_type: int = 2,
+        order_id: str | None = None,
+    ) -> dict | None:
+        """Submit an order asynchronously without waiting for the exchange response.
+
+        The T-Invest ``PostOrderAsync`` method returns an idempotency
+        ``order_request_id`` immediately. The final order state is delivered
+        via the order state stream or polled with :meth:`get_order_state`.
+
+        Parameters
+        ----------
+        account_id : str
+            The account ID.
+        figi : str
+            Instrument FIGI.
+        quantity : int
+            Order quantity in lots.
+        price : float, optional
+            Order price (for limit orders).
+        direction : int
+            Order direction (1=Buy, 2=Sell).
+        order_type : int
+            Order type (1=Limit, 2=Market, 3=BestPrice).
+        order_id : str, optional
+            Client order ID for idempotency.
+
+        Returns
+        -------
+        dict | None
+            Async order response dict with order_request_id,
+            execution_report_status and trade_intent_id keys.
+
+        """
+        if self._native is not None:
+            return await self._native.post_order_async(
+                account_id=account_id,
+                figi=figi,
+                quantity=quantity,
+                price=price,
+                direction=direction,
+                order_type=order_type,
+                order_id=order_id or "",
+            )
+        logger.warning("post_order_async: native client not available")
+        return None
+
     async def cancel_order(self, account_id: str, order_id: str) -> dict | None:
         """Cancel an order.
 

@@ -111,10 +111,20 @@ class TInvestExecClientConfig(LiveExecClientConfig, frozen=True, kw_only=True):
         The account ID to use for trading.
     instrument_provider : InstrumentProviderConfig, optional
         The instrument provider configuration.
+    use_bestprice_orders : bool, default False
+        If True, Nautilus ``MARKET`` orders are submitted as T-Invest
+        ``ORDER_TYPE_BESTPRICE`` ("best price"). Ignored for options, which
+        only support limit orders.
+    use_async_orders : bool, default False
+        If True, orders are submitted via ``PostOrderAsync`` (fire-and-forget;
+        no blocking wait for the exchange response). Order state is then
+        reconciled via the order state stream or polling.
     """
 
     tinvest: TInvestClientConfig
     account_id: str | None = None
+    use_bestprice_orders: bool = False
+    use_async_orders: bool = False
 
 
 class TInvestInstrumentProviderConfig(InstrumentProviderConfig, frozen=True):

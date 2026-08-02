@@ -591,20 +591,29 @@ pub fn order_side_to_tinvest(side: &str) -> i32 {
 }
 
 /// Convert nautilus OrderType to T-Invest OrderType.
+///
+/// Supports the T-Invest `ORDER_TYPE_BESTPRICE` ("best price") order type.
+/// In Nautilus a best-price order is expressed as a market order; when the
+/// caller explicitly passes `"BESTPRICE"` we map to `ORDER_TYPE_BESTPRICE`.
 pub fn order_type_to_tinvest(order_type: &str) -> i32 {
     match order_type {
-        "LIMIT" => 1,   // ORDER_TYPE_LIMIT
-        "MARKET" => 2,  // ORDER_TYPE_MARKET
+        "LIMIT" => 1,     // ORDER_TYPE_LIMIT
+        "MARKET" => 2,    // ORDER_TYPE_MARKET
+        "BESTPRICE" => 3, // ORDER_TYPE_BESTPRICE
         _ => 1,
     }
 }
 
 /// Convert T-Invest OrderType integer to nautilus OrderType string.
+///
+/// `ORDER_TYPE_BESTPRICE` has no direct Nautilus equivalent and behaves like
+/// a market order (aggressive fill at the best available price), so it is
+/// mapped to `"MARKET"`.
 pub fn order_type_from_tinvest(order_type: i32) -> &'static str {
     match order_type {
         1 => "LIMIT",      // ORDER_TYPE_LIMIT
         2 => "MARKET",     // ORDER_TYPE_MARKET
-        3 => "LIMIT",      // ORDER_TYPE_BESTPRICE — map to LIMIT
+        3 => "MARKET",     // ORDER_TYPE_BESTPRICE — map to MARKET
         _ => "LIMIT",
     }
 }
