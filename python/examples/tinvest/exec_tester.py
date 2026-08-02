@@ -32,7 +32,6 @@ from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
-from nautilus_trader.model.objects import Quantity
 from nautilus_trader.test_kit.strategies.tester_exec import ExecTester
 from nautilus_trader.test_kit.strategies.tester_exec import ExecTesterConfig
 

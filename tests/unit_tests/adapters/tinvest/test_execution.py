@@ -25,7 +25,6 @@ from nautilus_trader.adapters.tinvest.config import TInvestExecClientConfig
 from nautilus_trader.adapters.tinvest.execution import TInvestExecutionClient
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.enums import OrderStatus
-from nautilus_trader.model.identifiers import VenueOrderId
 from nautilus_trader.model.enums import OrderType
 from nautilus_trader.model.enums import PositionSide
 from nautilus_trader.model.enums import TimeInForce
@@ -62,9 +61,10 @@ def _make_mock_order(
     instrument_id=None,
     client_order_id=None,
 ) -> MagicMock:
-    """Build a MagicMock that walks like an Order.
+    """
+    Build a MagicMock that walks like an Order.
 
-    Adapter code references .order_side, .price.as_f64(), etc. (bugs in
+    Adapter code references .order_side, .price.as_double(), etc. (bugs in
     execution.py).  This mock supplies every attribute the adapter reads.
     """
     order = MagicMock()
@@ -72,18 +72,18 @@ def _make_mock_order(
     order.side = order_side
     order.order_type = order_type
     order.quantity = Quantity.from_int(quantity)
-    # Always wrap price/trigger_price in MagicMock so .as_f64() works
+    # Always wrap price/trigger_price in MagicMock so .as_double() works
     _pm = MagicMock()
-    _pm.as_f64 = MagicMock(return_value=float(price) if price else 0.0)
+    _pm.as_double = MagicMock(return_value=float(price) if price else 0.0)
     order.price = _pm if price is not None else MagicMock()
-    if not hasattr(order.price, 'as_f64') or not isinstance(order.price.as_f64, MagicMock):
-        order.price.as_f64 = MagicMock(return_value=float(price) if price else 0.0)
+    if not hasattr(order.price, "as_double") or not isinstance(order.price.as_double, MagicMock):
+        order.price.as_double = MagicMock(return_value=float(price) if price else 0.0)
 
     _tpm = MagicMock()
-    _tpm.as_f64 = MagicMock(return_value=float(trigger_price) if trigger_price else 0.0)
+    _tpm.as_double = MagicMock(return_value=float(trigger_price) if trigger_price else 0.0)
     order.trigger_price = _tpm if trigger_price is not None else MagicMock()
-    if not hasattr(order.trigger_price, 'as_f64') or not isinstance(order.trigger_price.as_f64, MagicMock):
-        order.trigger_price.as_f64 = MagicMock(return_value=float(trigger_price) if trigger_price else 0.0)
+    if not hasattr(order.trigger_price, "as_double") or not isinstance(order.trigger_price.as_double, MagicMock):
+        order.trigger_price.as_double = MagicMock(return_value=float(trigger_price) if trigger_price else 0.0)
 
     order.instrument_id = instrument_id or _SBER.id
     order.client_order_id = client_order_id or TestIdStubs.client_order_id()
@@ -115,7 +115,7 @@ def _make_modify_command(
     cmd.venue_order_id = venue_order_id or VenueOrderId("vorder-456")
     cmd.quantity = quantity if quantity is not None else Quantity.from_int(200)
     cmd.price = MagicMock()
-    cmd.price.as_f64 = MagicMock(return_value=100.0 if price is None else float(price))
+    cmd.price.as_double = MagicMock(return_value=100.0 if price is None else float(price))
     return cmd
 
 
@@ -158,7 +158,7 @@ class _TestExecClient:
 
         # Needed by _update_account_state (checks self.account_id is None)
         self.account_id = self._account_id
-        self.id = ClientOrderId('TINVEST')  # needed by generate_mass_status
+        self.id = ClientOrderId("TINVEST")  # needed by generate_mass_status
 
         self.generate_order_submitted: MagicMock = MagicMock()
         self.generate_order_accepted: MagicMock = MagicMock()
@@ -199,25 +199,27 @@ class _TestExecClient:
 
     async def generate_fill_reports(self, command) -> list:
         # Bug workaround: real method fails due to FillReport constructor mismatch
-        from nautilus_trader.execution.reports import FillReport
-        from nautilus_trader.model.identifiers import TradeId
-        from nautilus_trader.model.objects import Quantity as ModelQuantity, Price as ModelPrice, Money as ModelMoney
-        from nautilus_trader.model.enums import LiquiditySide
         from nautilus_trader.core.uuid import UUID4
+        from nautilus_trader.execution.reports import FillReport
+        from nautilus_trader.model.enums import LiquiditySide
+        from nautilus_trader.model.identifiers import TradeId
+        from nautilus_trader.model.objects import Money as ModelMoney
+        from nautilus_trader.model.objects import Price as ModelPrice
+        from nautilus_trader.model.objects import Quantity as ModelQuantity
         result = await self._client.get_operations(
             account_id=self._account_str,
             figi=None, from_ts=None, to_ts=None,
         )
         reports = []
         ts_init = self._clock.timestamp_ns()
-        for item in (result or {}).get('items', []):
+        for item in (result or {}).get("items", []):
             reports.append(FillReport(
                 account_id=self._account_id,
-                instrument_id=self._parse_instrument_id(item.get('figi', '')),
-                venue_order_id=VenueOrderId(item.get('id', '')),
-                trade_id=TradeId(item.get('id', '')),
+                instrument_id=self._parse_instrument_id(item.get("figi", "")),
+                venue_order_id=VenueOrderId(item.get("id", "")),
+                trade_id=TradeId(item.get("id", "")),
                 order_side=OrderSide.BUY,
-                last_qty=ModelQuantity(float(item.get('quantity', 0)), 0),
+                last_qty=ModelQuantity(float(item.get("quantity", 0)), 0),
                 last_px=ModelPrice(0.0, 2),
                 commission=ModelMoney(0.0, Currency.from_str("RUB")),
                 liquidity_side=LiquiditySide.TAKER,
@@ -229,30 +231,30 @@ class _TestExecClient:
 
     async def generate_position_status_reports(self, command) -> list:
         # Bug workaround: real method fails due to PositionStatusReport constructor mismatch
+        from nautilus_trader.core.uuid import UUID4
         from nautilus_trader.execution.reports import PositionStatusReport
         from nautilus_trader.model.objects import Quantity as ModelQuantity
-        from nautilus_trader.core.uuid import UUID4
         result = await self._client.get_positions(self._account_str)
         reports = []
         ts_init = self._clock.timestamp_ns()
-        for sec in (result or {}).get('securities', []):
-            balance = float(sec.get('balance', 0))
+        for sec in (result or {}).get("securities", []):
+            balance = float(sec.get("balance", 0))
             side = PositionSide.LONG if balance > 0 else PositionSide.SHORT if balance < 0 else PositionSide.FLAT
             reports.append(PositionStatusReport(
                 account_id=self._account_id,
-                instrument_id=self._parse_instrument_id(sec.get('figi', '')),
+                instrument_id=self._parse_instrument_id(sec.get("figi", "")),
                 position_side=side,
                 quantity=ModelQuantity(abs(balance), 0),
                 report_id=UUID4(),
                 ts_last=ts_init,
                 ts_init=ts_init,
             ))
-        for fut in (result or {}).get('futures', []):
-            balance = float(fut.get('balance', 0))
+        for fut in (result or {}).get("futures", []):
+            balance = float(fut.get("balance", 0))
             side = PositionSide.LONG if balance > 0 else PositionSide.SHORT if balance < 0 else PositionSide.FLAT
             reports.append(PositionStatusReport(
                 account_id=self._account_id,
-                instrument_id=self._parse_instrument_id(fut.get('figi', '')),
+                instrument_id=self._parse_instrument_id(fut.get("figi", "")),
                 position_side=side,
                 quantity=ModelQuantity(abs(balance), 0),
                 report_id=UUID4(),
@@ -272,25 +274,27 @@ class _TestExecClient:
 
 
     def _parse_instrument_id(self, figi: str):
-        from nautilus_trader.model.identifiers import InstrumentId, Symbol
+        from nautilus_trader.model.identifiers import InstrumentId
+        from nautilus_trader.model.identifiers import Symbol
         return InstrumentId(Symbol(figi), TINVEST_VENUE)
 
     def _order_state_to_report(self, state: dict):
         # Bug workaround: real method fails (missing report_id, ts_accepted)
         from nautilus_trader.execution.reports import OrderStatusReport
-        from nautilus_trader.model.identifiers import InstrumentId, Symbol
+        from nautilus_trader.model.identifiers import InstrumentId
+        from nautilus_trader.model.identifiers import Symbol
         from nautilus_trader.model.objects import Quantity as ModelQuantity
         return OrderStatusReport(
             account_id=self._account_id,
-            instrument_id=InstrumentId(Symbol(state.get('figi', '')), TINVEST_VENUE),
+            instrument_id=InstrumentId(Symbol(state.get("figi", "")), TINVEST_VENUE),
             client_order_id=None,
-            venue_order_id=VenueOrderId(state.get('order_id', '')),
+            venue_order_id=VenueOrderId(state.get("order_id", "")),
             order_side=OrderSide.BUY,
             order_type=OrderType.LIMIT,
             time_in_force=TimeInForce.GTC,
             order_status=OrderStatus.ACCEPTED,
-            quantity=ModelQuantity(state.get('lots_requested', 0), 0),
-            filled_qty=ModelQuantity(state.get('lots_executed', 0), 0),
+            quantity=ModelQuantity(state.get("lots_requested", 0), 0),
+            filled_qty=ModelQuantity(state.get("lots_executed", 0), 0),
             report_id=TestIdStubs.uuid(),
             ts_accepted=0,
             ts_init=self._clock.timestamp_ns(),
@@ -760,8 +764,9 @@ class TestReportsAccountStreams:
     def test_is_option_instrument(self):
         assert TInvestExecutionClient._is_option_instrument(_SBER) is False
 
+        from nautilus_trader.model.enums import AssetClass
+        from nautilus_trader.model.enums import OptionKind
         from nautilus_trader.model.instruments import OptionContract
-        from nautilus_trader.model.enums import AssetClass, OptionKind
 
         option = OptionContract(
             instrument_id=InstrumentId(Symbol("SBER2503"), Venue("TINVEST")),
@@ -783,8 +788,9 @@ class TestReportsAccountStreams:
         assert TInvestExecutionClient._is_option_instrument(option) is True
 
     def test_map_order_type_forces_limit_for_options(self):
+        from nautilus_trader.model.enums import AssetClass
+        from nautilus_trader.model.enums import OptionKind
         from nautilus_trader.model.instruments import OptionContract
-        from nautilus_trader.model.enums import AssetClass, OptionKind
 
         option = OptionContract(
             instrument_id=InstrumentId(Symbol("SBER2503"), Venue("TINVEST")),
@@ -1187,7 +1193,7 @@ class TestStreamProcessingMethods:
         import asyncio
         try:
             await asyncio.wait_for(task, timeout=timeout)
-        except (asyncio.CancelledError, asyncio.TimeoutError):
+        except (TimeoutError, asyncio.CancelledError):
             pass
 
     async def _feed_and_cancel(self, client, queue, data):

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import Optional
 
 from nautilus_trader.adapters.tinvest.common import TINVEST_VENUE
 from nautilus_trader.adapters.tinvest.config import TInvestDataClientConfig
@@ -28,27 +27,22 @@ from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.component import MessageBus
 from nautilus_trader.common.enums import LogColor
-from nautilus_trader.core import nautilus_pyo3
-from nautilus_trader.live.cancellation import DEFAULT_FUTURE_CANCELLATION_TIMEOUT
 from nautilus_trader.live.data_client import LiveMarketDataClient
 from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarSpecification
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.data import BookOrder
-from nautilus_trader.model.data import DataType
-from nautilus_trader.model.data import OrderBookDelta
-from nautilus_trader.model.data import OrderBookDeltas
 from nautilus_trader.model.data import OrderBookDepth10
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.enums import AggressorSide
-from nautilus_trader.model.enums import BookAction
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TradeId
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
+
 
 # Native gRPC streaming import (PyO3)
 try:
@@ -59,10 +53,8 @@ except ImportError:
     TInvestMarketDataStream = None  # type: ignore
     _HAS_NATIVE_STREAM_CLASS = False
 
-from nautilus_trader.adapters.tinvest.constants import _CANDLE_INTERVAL_MAP
 from nautilus_trader.adapters.tinvest.constants import _BAR_SPEC_TO_INTERVAL
-
-from nautilus_trader.core.datetime import unix_nanos_to_dt
+from nautilus_trader.adapters.tinvest.constants import _CANDLE_INTERVAL_MAP
 
 
 def _datetime_to_ns(dt: datetime | None) -> int | None:
@@ -132,7 +124,7 @@ class TInvestDataClient(LiveMarketDataClient):
         self._config = config
         self._instrument_provider = instrument_provider
 
-        self._log.info(f"T-Invest DataClient initialized", LogColor.BLUE)
+        self._log.info("T-Invest DataClient initialized", LogColor.BLUE)
         self._log.info(f"{config.update_instruments_interval_mins=}", LogColor.BLUE)
 
         # Periodic instrument update task
@@ -398,7 +390,8 @@ class TInvestDataClient(LiveMarketDataClient):
     # -- Native Stream Loop -----------------------------------------------------------------------
 
     async def _native_stream_loop(self) -> None:
-        """Background task that reads from the native gRPC stream queue.
+        """
+        Background task that reads from the native gRPC stream queue.
 
         Reads Python dicts from `self._market_data_stream.queue` (asyncio.Queue)
         and converts them into Nautilus model objects, then pushes via
@@ -418,7 +411,7 @@ class TInvestDataClient(LiveMarketDataClient):
                 # Wait for data from the native stream queue
                 # Use a timeout to periodically check if we should exit
                 data = await asyncio.wait_for(queue.get(), timeout=1.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Check if stream is still active
                 if (
                     self._market_data_stream is None
@@ -439,7 +432,8 @@ class TInvestDataClient(LiveMarketDataClient):
                 self._log.warning(f"Error processing native stream data: {e}")
 
     def _process_native_stream_data(self, data: dict) -> None:
-        """Process a single data dict from the native gRPC stream.
+        """
+        Process a single data dict from the native gRPC stream.
 
         Parameters
         ----------
@@ -527,7 +521,8 @@ class TInvestDataClient(LiveMarketDataClient):
         size_precision: int,
         ts_init: int,
     ) -> None:
-        """Convert native orderbook dict to OrderBookDepth10 and QuoteTick.
+        """
+        Convert native orderbook dict to OrderBookDepth10 and QuoteTick.
 
         The native stream delivers order book with bids/asks as dicts
         keyed by quantity (string), values are Quotation dicts.
@@ -675,7 +670,8 @@ class TInvestDataClient(LiveMarketDataClient):
     # -- Callback Handlers ------------------------------------------------------------------------
 
     def _on_order_book(self, instrument_id: InstrumentId, data: dict) -> None:
-        """Handle order book update from streaming.
+        """
+        Handle order book update from streaming.
 
         Converts T-Invest order book dict to OrderBookDepth10 and pushes
         via _handle_data().
@@ -692,8 +688,8 @@ class TInvestDataClient(LiveMarketDataClient):
                 self._log.debug(f"Instrument {instrument_id} not in cache for order book")
                 return
 
-            price_precision = instrument.price_precision if instrument else 2
-            size_precision = instrument.size_precision if instrument else 0
+            price_precision = instrument.price_precision
+            size_precision = instrument.size_precision
 
             # Build BookOrder lists for bids and asks
             bid_orders: list[BookOrder] = []
@@ -744,7 +740,8 @@ class TInvestDataClient(LiveMarketDataClient):
             self._log.warning(f"Failed to process order book for {instrument_id}: {e}")
 
     def _on_quote_tick(self, instrument_id: InstrumentId, data: dict) -> None:
-        """Handle best bid/ask from order book as QuoteTick.
+        """
+        Handle best bid/ask from order book as QuoteTick.
 
         Uses depth=1 order book data to extract best bid/ask.
         """
@@ -785,7 +782,8 @@ class TInvestDataClient(LiveMarketDataClient):
             self._log.warning(f"Failed to process quote tick for {instrument_id}: {e}")
 
     def _on_trade_tick(self, instrument_id: InstrumentId, data: list[dict] | dict) -> None:
-        """Handle trade updates from streaming.
+        """
+        Handle trade updates from streaming.
 
         Converts T-Invest trade list (or single dict) to TradeTick objects.
 
@@ -841,7 +839,8 @@ class TInvestDataClient(LiveMarketDataClient):
             self._log.warning(f"Failed to process trade tick for {instrument_id}: {e}")
 
     def _on_bar(self, instrument_id: InstrumentId, interval: int, data: list[dict]) -> None:
-        """Handle candle updates from polling.
+        """
+        Handle candle updates from polling.
 
         Converts T-Invest candle list to Bar objects.
         """
@@ -887,7 +886,7 @@ class TInvestDataClient(LiveMarketDataClient):
 
     async def _request_instrument(
         self,
-        request: "RequestInstrument",
+        request: RequestInstrument,
     ) -> None:
         instrument_id = request.instrument_id
 
@@ -916,7 +915,7 @@ class TInvestDataClient(LiveMarketDataClient):
 
     async def _request_instruments(
         self,
-        request: "RequestInstruments",
+        request: RequestInstruments,
     ) -> None:
         # Load all instruments via the provider
         if not self._instrument_provider.is_loaded:
@@ -927,7 +926,7 @@ class TInvestDataClient(LiveMarketDataClient):
 
     async def _request_quote_ticks(
         self,
-        request: "RequestQuoteTicks",
+        request: RequestQuoteTicks,
     ) -> None:
         instrument_id = request.instrument_id
         figi = str(instrument_id.symbol)
@@ -975,7 +974,7 @@ class TInvestDataClient(LiveMarketDataClient):
 
     async def _request_trade_ticks(
         self,
-        request: "RequestTradeTicks",
+        request: RequestTradeTicks,
     ) -> None:
         instrument_id = request.instrument_id
         figi = str(instrument_id.symbol)
@@ -997,11 +996,11 @@ class TInvestDataClient(LiveMarketDataClient):
 
     async def _request_order_book_snapshot(
         self,
-        request: "RequestOrderBookSnapshot",
+        request: RequestOrderBookSnapshot,
     ) -> None:
         instrument_id = request.instrument_id
         figi = str(instrument_id.symbol)
-        depth = request.depth if hasattr(request, 'depth') and request.depth else 10
+        depth = request.depth if hasattr(request, "depth") and request.depth else 10
 
         self._log.info(f"Requesting order book snapshot for {figi} depth={depth}")
 
@@ -1015,7 +1014,7 @@ class TInvestDataClient(LiveMarketDataClient):
 
     async def _request_bars(
         self,
-        request: "RequestBars",
+        request: RequestBars,
     ) -> None:
         bar_type = request.bar_type
         instrument_id = bar_type.instrument_id

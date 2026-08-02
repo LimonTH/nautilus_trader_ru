@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 
 from nautilus_trader.adapters.tinvest.common import TINVEST_VENUE
 from nautilus_trader.adapters.tinvest.config import TInvestExecClientConfig
@@ -27,13 +26,12 @@ from nautilus_trader.model.objects import AccountBalance
 from nautilus_trader.model.objects import Currency
 from nautilus_trader.model.objects import Money
 
+
 # Native gRPC execution streaming (PyO3)
 try:
-    from nautilus_trader.core.nautilus_pyo3.tinvest import (
-        TInvestOrderStateStream,
-        TInvestPortfolioStream,
-        TInvestPositionsStream,
-    )
+    from nautilus_trader.core.nautilus_pyo3.tinvest import TInvestOrderStateStream
+    from nautilus_trader.core.nautilus_pyo3.tinvest import TInvestPortfolioStream
+    from nautilus_trader.core.nautilus_pyo3.tinvest import TInvestPositionsStream
 
     _HAS_NATIVE_STREAMS = True
 except ImportError:
@@ -41,10 +39,13 @@ except ImportError:
     TInvestPortfolioStream = None  # type: ignore
     TInvestPositionsStream = None  # type: ignore
     _HAS_NATIVE_STREAMS = False
+from nautilus_trader.adapters.tinvest.constants import _STOP_ORDER_TYPES
+from nautilus_trader.adapters.tinvest.constants import _TINVEST_DIRECTION_TO_SIDE
+from nautilus_trader.adapters.tinvest.constants import _TINVEST_ORDER_TYPE
+from nautilus_trader.adapters.tinvest.constants import _TINVEST_STATUS_TO_ORDER_STATUS
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.component import MessageBus
 from nautilus_trader.common.enums import LogColor
-from nautilus_trader.core import nautilus_pyo3
 from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.execution.messages import CancelAllOrders
 from nautilus_trader.execution.messages import CancelOrder
@@ -56,28 +57,22 @@ from nautilus_trader.execution.reports import FillReport
 from nautilus_trader.execution.reports import OrderStatusReport
 from nautilus_trader.execution.reports import PositionStatusReport
 from nautilus_trader.live.execution_client import LiveExecutionClient
-from nautilus_trader.model.identifiers import AccountId
-from nautilus_trader.model.identifiers import ClientId
-from nautilus_trader.model.identifiers import VenueOrderId
-from nautilus_trader.model.identifiers import TradeId
+from nautilus_trader.model.enums import LiquiditySide
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.enums import OrderStatus
 from nautilus_trader.model.enums import OrderType
-from nautilus_trader.model.enums import TimeInForce
-from nautilus_trader.model.enums import LiquiditySide
 from nautilus_trader.model.enums import PositionSide
-from nautilus_trader.model.objects import Quantity as ModelQuantity
-from nautilus_trader.model.objects import Price as ModelPrice
+from nautilus_trader.model.enums import TimeInForce
+from nautilus_trader.model.identifiers import AccountId
+from nautilus_trader.model.identifiers import ClientId
+from nautilus_trader.model.identifiers import TradeId
+from nautilus_trader.model.identifiers import VenueOrderId
 from nautilus_trader.model.objects import Money as ModelMoney
+from nautilus_trader.model.objects import Price as ModelPrice
+from nautilus_trader.model.objects import Quantity as ModelQuantity
 
 
-from nautilus_trader.adapters.tinvest.constants import _TINVEST_DIRECTION_TO_SIDE
-from nautilus_trader.adapters.tinvest.constants import _TINVEST_STATUS_TO_ORDER_STATUS
-from nautilus_trader.adapters.tinvest.constants import _TINVEST_ORDER_TYPE
-from nautilus_trader.adapters.tinvest.constants import _STOP_ORDER_TYPES
-
-
-def _safe_extract_price(raw, default_precision: int = 2) -> "ModelPrice":
+def _safe_extract_price(raw, default_precision: int = 2) -> ModelPrice:
     """
     Extract a ``ModelPrice`` from a T-Invest price dict or proto-object.
 
@@ -99,9 +94,9 @@ def _safe_extract_price(raw, default_precision: int = 2) -> "ModelPrice":
     if isinstance(raw, dict):
         units = float(raw.get("units", 0))
         nano = float(raw.get("nano", 0))
-    elif hasattr(raw, 'units'):
-        units = float(getattr(raw, 'units', 0))
-        nano = float(getattr(raw, 'nano', 0))
+    elif hasattr(raw, "units"):
+        units = float(getattr(raw, "units", 0))
+        nano = float(getattr(raw, "nano", 0))
     else:
         return ModelPrice(0.0, default_precision)
 
@@ -171,7 +166,7 @@ class TInvestExecutionClient(LiveExecutionClient):
         self._positions_stream = None
         self._native_stream_tasks: list[asyncio.Task] = []
 
-        self._log.info(f"T-Invest ExecutionClient initialized", LogColor.BLUE)
+        self._log.info("T-Invest ExecutionClient initialized", LogColor.BLUE)
         self._log.info(f"Account: {account_id}", LogColor.BLUE)
 
     # -- Connection -------------------------------------------------------------------------------
@@ -251,11 +246,11 @@ class TInvestExecutionClient(LiveExecutionClient):
                             currency_str = currency_raw
                         total_units = int(total_amount.get("units", 0))
                         total_nano = int(total_amount.get("nano", 0))
-                    elif hasattr(total_amount, 'currency'):
+                    elif hasattr(total_amount, "currency"):
                         # Proto object (e.g. MoneyValue) – extract attributes directly
                         currency_str = str(total_amount.currency)
-                        total_units = int(getattr(total_amount, 'units', 0))
-                        total_nano = int(getattr(total_amount, 'nano', 0))
+                        total_units = int(getattr(total_amount, "units", 0))
+                        total_nano = int(getattr(total_amount, "nano", 0))
                     else:
                         self._log.warning(
                             f"Unexpected total_amount type: {type(total_amount)}, skipping",
@@ -567,7 +562,8 @@ class TInvestExecutionClient(LiveExecutionClient):
             )
 
     def _map_order_type(self, order_type: OrderType, instrument_id: object) -> int:
-        """Map a Nautilus OrderType to a T-Invest order type integer.
+        """
+        Map a Nautilus OrderType to a T-Invest order type integer.
 
         T-Invest order types: 1=Limit, 2=Market, 3=BestPrice.
 
@@ -609,7 +605,8 @@ class TInvestExecutionClient(LiveExecutionClient):
         direction: int,
         qty,
     ) -> None:
-        """Submit a stop-order via T-Invest PostStopOrder (F3).
+        """
+        Submit a stop-order via T-Invest PostStopOrder (F3).
 
         Maps Nautilus stop order types to T-Invest stop-order parameters:
 
@@ -825,7 +822,7 @@ class TInvestExecutionClient(LiveExecutionClient):
             self._log.error(f"Failed to cancel all orders: {e}")
 
     async def _query_account(self, command: object) -> None:
-        self._log.info(f"query_account called")
+        self._log.info("query_account called")
         await self._update_account_state()
 
     # -- Native Stream Management ------------------------------------------------------------------
@@ -982,7 +979,8 @@ class TInvestExecutionClient(LiveExecutionClient):
             ts_init = self._clock.timestamp_ns()
 
             # Build instrument_id from ticker
-            from nautilus_trader.model.identifiers import InstrumentId, Symbol
+            from nautilus_trader.model.identifiers import InstrumentId
+            from nautilus_trader.model.identifiers import Symbol
 
             instrument_id = InstrumentId(Symbol(ticker), TINVEST_VENUE)
 
@@ -1010,7 +1008,8 @@ class TInvestExecutionClient(LiveExecutionClient):
         self,
         data: dict,
     ) -> tuple[list[dict], list[dict]]:
-        """Parse portfolio stream dict to balances and margins lists.
+        """
+        Parse portfolio stream dict to balances and margins lists.
 
         Returns
         -------
@@ -1032,10 +1031,10 @@ class TInvestExecutionClient(LiveExecutionClient):
                     currency_str = currency_str.get("currency", "RUB")
                 total_units = int(total_amount.get("units", 0))
                 total_nano = int(total_amount.get("nano", 0))
-            elif hasattr(total_amount, 'currency'):
+            elif hasattr(total_amount, "currency"):
                 currency_str = str(total_amount.currency)
-                total_units = int(getattr(total_amount, 'units', 0))
-                total_nano = int(getattr(total_amount, 'nano', 0))
+                total_units = int(getattr(total_amount, "units", 0))
+                total_nano = int(getattr(total_amount, "nano", 0))
             else:
                 return balances, margins
 
@@ -1059,7 +1058,8 @@ class TInvestExecutionClient(LiveExecutionClient):
         return balances, margins
 
     def _parse_position_status_reports(self, data: dict) -> list[PositionStatusReport]:
-        """Parse positions stream dict to PositionStatusReport list.
+        """
+        Parse positions stream dict to PositionStatusReport list.
 
         Note: The current PyO3 positions stream converter only passes counts
         (money_count, securities_count, etc.) rather than full position details.
@@ -1084,7 +1084,7 @@ class TInvestExecutionClient(LiveExecutionClient):
                 # For now, positions stream provides metadata only.
                 # Full position data requires extended Rust converter.
                 # Trigger a full position refresh via polling as fallback.
-                asyncio.create_task(self._update_account_state())
+                self.create_task(self._update_account_state())
         except Exception as e:
             self._log.warning(f"Failed to parse position status reports: {e}")
 
@@ -1176,10 +1176,10 @@ class TInvestExecutionClient(LiveExecutionClient):
                 comm_units + comm_nano * 1e-9,
                 Currency.from_str(comm_currency_str),
             )
-        elif hasattr(commission_data, 'units'):
-            comm_units = float(getattr(commission_data, 'units', 0))
-            comm_nano = float(getattr(commission_data, 'nano', 0))
-            comm_currency_str = str(getattr(commission_data, 'currency', 'RUB'))
+        elif hasattr(commission_data, "units"):
+            comm_units = float(getattr(commission_data, "units", 0))
+            comm_nano = float(getattr(commission_data, "nano", 0))
+            comm_currency_str = str(getattr(commission_data, "currency", "RUB"))
             commission = ModelMoney(
                 comm_units + comm_nano * 1e-9,
                 Currency.from_str(comm_currency_str),
@@ -1248,6 +1248,7 @@ class TInvestExecutionClient(LiveExecutionClient):
 
     def _parse_instrument_id(self, figi: str) -> object:
         """Parse FIGI string to InstrumentId."""
-        from nautilus_trader.model.identifiers import InstrumentId, Symbol
+        from nautilus_trader.model.identifiers import InstrumentId
+        from nautilus_trader.model.identifiers import Symbol
 
         return InstrumentId(Symbol(figi), TINVEST_VENUE)

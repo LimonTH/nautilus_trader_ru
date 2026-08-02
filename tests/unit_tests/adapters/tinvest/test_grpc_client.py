@@ -36,7 +36,8 @@ def _make_config(**kwargs) -> TInvestClientConfig:
 
 
 def _make_native_mock(**method_overrides):
-    """Return a MagicMock simulating the PyO3 native client.
+    """
+    Return a MagicMock simulating the PyO3 native client.
 
     All async methods return sensible defaults. Use method_overrides
     to customize specific return values.
@@ -151,7 +152,7 @@ class TestTInvestGrpcClientInit:
 
 
 class TestConnection:
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_connect_with_native_client(self):
         """connect() calls _native.connect() when native is available."""
         config = _make_config()
@@ -164,7 +165,7 @@ class TestConnection:
 
         native_mock.connect.assert_awaited_once()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_connect_without_native_client_logs_warning(self, caplog):
         """connect() logs warning when native client is not available, does not crash."""
         client = _make_client_without_native()
@@ -174,7 +175,7 @@ class TestConnection:
 
         assert "T-Invest gRPC client not available" in caplog.text
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_disconnect_cancels_polling_tasks(self):
         """disconnect() cancels all active polling tasks and clears state."""
         config = _make_config()
@@ -201,7 +202,7 @@ class TestConnection:
         assert client._polling_tasks == {}
         assert client._subscription_callbacks == {}
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_disconnect_without_native(self):
         """disconnect() works even without native client (no crash)."""
         client = _make_client_without_native()
@@ -234,7 +235,7 @@ class TestConnection:
 
 
 class TestDataMethods:
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_instruments_returns_list(self):
         """request_instruments returns a list from native client."""
         config = _make_config()
@@ -249,7 +250,7 @@ class TestDataMethods:
         assert result == expected
         native_mock.request_instruments.assert_awaited_once()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_instruments_without_native(self):
         """request_instruments returns [] when native is not available."""
         client = _make_client_without_native()
@@ -258,7 +259,7 @@ class TestDataMethods:
 
         assert result == []
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_order_book(self):
         """request_order_book returns the order book dict."""
         config = _make_config()
@@ -273,7 +274,7 @@ class TestDataMethods:
         assert result == expected
         native_mock.request_order_book.assert_awaited_once_with("F1", 10)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_order_book_without_native(self):
         """request_order_book returns None when native is not available."""
         client = _make_client_without_native()
@@ -282,7 +283,7 @@ class TestDataMethods:
 
         assert result is None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_trades(self):
         """request_trades returns a list of trade dicts."""
         config = _make_config()
@@ -297,7 +298,7 @@ class TestDataMethods:
         assert result == expected
         native_mock.request_trades.assert_awaited_once_with("F1", 0, 1000)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_trades_without_native(self):
         """request_trades returns [] when native is not available."""
         client = _make_client_without_native()
@@ -306,7 +307,7 @@ class TestDataMethods:
 
         assert result == []
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_candles(self):
         """request_candles returns a list of candle dicts."""
         config = _make_config()
@@ -320,7 +321,7 @@ class TestDataMethods:
 
         assert result == expected
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_candles_without_native(self):
         """request_candles returns [] when native is not available."""
         client = _make_client_without_native()
@@ -329,7 +330,7 @@ class TestDataMethods:
 
         assert result == []
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_instrument_not_found(self):
         """request_instrument returns None when not found."""
         config = _make_config()
@@ -344,7 +345,7 @@ class TestDataMethods:
 
         assert result is None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_instrument_returns_dict(self):
         """request_instrument returns a dict when found."""
         config = _make_config()
@@ -358,7 +359,7 @@ class TestDataMethods:
 
         assert result == expected
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_request_instrument_without_native(self):
         """request_instrument returns None when native is not available."""
         client = _make_client_without_native()
@@ -374,7 +375,7 @@ class TestDataMethods:
 
 
 class TestPolling:
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_start_polling_creates_task(self):
         """_start_polling creates an asyncio Task."""
         config = _make_config()
@@ -400,7 +401,7 @@ class TestPolling:
         # Wait a tick for cancellation to propagate
         await asyncio.sleep(0.05)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_stop_polling_cancels_task(self):
         """_stop_polling cancels the task and removes it from state."""
         config = _make_config()
@@ -423,7 +424,7 @@ class TestPolling:
         assert "test_key" not in client._subscription_callbacks
         assert task.cancelled()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_duplicate_polling_prevented(self):
         """Calling _start_polling with the same key twice does not create a second task."""
         config = _make_config()
@@ -452,7 +453,7 @@ class TestPolling:
 
 
 class TestSubscriptions:
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_subscribe_order_book_polling(self):
         """subscribe_order_book starts polling when native is available."""
         config = _make_config()
@@ -471,7 +472,7 @@ class TestSubscriptions:
         client._stop_polling(key)
         await asyncio.sleep(0.05)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_unsubscribe_order_book(self):
         """unsubscribe_order_book stops polling for the given figi."""
         config = _make_config()
@@ -489,7 +490,7 @@ class TestSubscriptions:
 
         assert key not in client._polling_tasks
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_subscribe_trades_polling(self):
         """subscribe_trades starts polling when native is available."""
         config = _make_config()
@@ -508,7 +509,7 @@ class TestSubscriptions:
         client._stop_polling(key)
         await asyncio.sleep(0.05)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_subscribe_candles_polling(self):
         """subscribe_candles starts polling when native is available."""
         config = _make_config()
@@ -527,9 +528,9 @@ class TestSubscriptions:
         client._stop_polling(key)
         await asyncio.sleep(0.05)
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_subscribe_no_callback_warning(self, caplog):
-        """subscribe without callback logs a warning and returns early."""
+        """Subscribe without callback logs a warning and returns early."""
         config = _make_config()
         client = TInvestGrpcClient(config)
         client._native = _make_native_mock()
@@ -540,7 +541,7 @@ class TestSubscriptions:
         assert "no callback provided" in caplog.text
         assert "order_book:F1:10" not in client._polling_tasks
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_subscribe_trades_no_callback_warning(self, caplog):
         """subscribe_trades without callback logs a warning."""
         config = _make_config()
@@ -552,7 +553,7 @@ class TestSubscriptions:
 
         assert "no callback provided" in caplog.text
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_subscribe_candles_no_callback_warning(self, caplog):
         """subscribe_candles without callback logs a warning."""
         config = _make_config()
@@ -564,7 +565,7 @@ class TestSubscriptions:
 
         assert "no callback provided" in caplog.text
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_subscribe_order_book_without_native(self, caplog):
         """subscribe_order_book logs warning when native is not available."""
         client = _make_client_without_native()
@@ -581,7 +582,7 @@ class TestSubscriptions:
 
 
 class TestExecutionMethods:
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_post_order(self):
         """post_order returns the order response dict."""
         config = _make_config()
@@ -604,7 +605,7 @@ class TestExecutionMethods:
         assert result == expected
         native_mock.post_order.assert_awaited_once()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_post_order_without_native(self):
         """post_order returns None when native is not available."""
         client = _make_client_without_native()
@@ -617,7 +618,7 @@ class TestExecutionMethods:
 
         assert result is None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_post_order_async(self):
         """post_order_async returns the async response dict."""
         config = _make_config()
@@ -636,7 +637,7 @@ class TestExecutionMethods:
         assert result == expected
         native_mock.post_order_async.assert_awaited_once()
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_post_order_async_without_native(self):
         """post_order_async returns None when native is not available."""
         client = _make_client_without_native()
@@ -649,7 +650,7 @@ class TestExecutionMethods:
 
         assert result is None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_cancel_order(self):
         """cancel_order returns the cancel response dict."""
         config = _make_config()
@@ -664,7 +665,7 @@ class TestExecutionMethods:
         assert result == expected
         native_mock.cancel_order.assert_awaited_once_with("ACC-1", "order-123")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_cancel_order_without_native(self):
         """cancel_order returns None when native is not available."""
         client = _make_client_without_native()
@@ -673,7 +674,7 @@ class TestExecutionMethods:
 
         assert result is None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_get_orders(self):
         """get_orders returns a list of order dicts."""
         config = _make_config()
@@ -688,7 +689,7 @@ class TestExecutionMethods:
         assert result == expected
         native_mock.get_orders.assert_awaited_once_with("ACC-1")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_get_orders_without_native(self):
         """get_orders returns [] when native is not available."""
         client = _make_client_without_native()
@@ -697,7 +698,7 @@ class TestExecutionMethods:
 
         assert result == []
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_get_positions(self):
         """get_positions returns the positions dict."""
         config = _make_config()
@@ -712,7 +713,7 @@ class TestExecutionMethods:
         assert result == expected
         native_mock.get_positions.assert_awaited_once_with("ACC-1")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_get_positions_without_native(self):
         """get_positions returns None when native is not available."""
         client = _make_client_without_native()
@@ -721,7 +722,7 @@ class TestExecutionMethods:
 
         assert result is None
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_get_portfolio(self):
         """get_portfolio returns the portfolio dict."""
         config = _make_config()
@@ -736,7 +737,7 @@ class TestExecutionMethods:
         assert result == expected
         native_mock.get_portfolio.assert_awaited_once_with("ACC-1")
 
-    @pytest.mark.asyncio()
+    @pytest.mark.asyncio
     async def test_get_portfolio_without_native(self):
         """get_portfolio returns None when native is not available."""
         client = _make_client_without_native()

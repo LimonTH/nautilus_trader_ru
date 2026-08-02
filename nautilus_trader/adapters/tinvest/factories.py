@@ -14,9 +14,7 @@
 # -------------------------------------------------------------------------------------------------
 
 import asyncio
-from functools import lru_cache
 
-from nautilus_trader.adapters.tinvest.common import TINVEST_VENUE
 from nautilus_trader.adapters.tinvest.config import TInvestClientConfig
 from nautilus_trader.adapters.tinvest.config import TInvestDataClientConfig
 from nautilus_trader.adapters.tinvest.config import TInvestExecClientConfig

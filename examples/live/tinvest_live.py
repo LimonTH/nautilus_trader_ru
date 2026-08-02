@@ -27,24 +27,24 @@ import os
 
 # Load .env / .envrc before any os.getenv() calls
 import sys
+
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
 from load_env import load_env
+
 
 load_env()  # reads .env (or .envrc as fallback)
 
 from nautilus_trader.adapters.tinvest.common import TINVEST_VENUE
-from nautilus_trader.adapters.tinvest.config import (
-    TInvestClientConfig,
-    TInvestDataClientConfig,
-    TInvestExecClientConfig,
-)
-from nautilus_trader.adapters.tinvest.factories import (
-    TInvestLiveDataClientFactory,
-    TInvestLiveExecClientFactory,
-)
+from nautilus_trader.adapters.tinvest.config import TInvestClientConfig
+from nautilus_trader.adapters.tinvest.config import TInvestDataClientConfig
+from nautilus_trader.adapters.tinvest.config import TInvestExecClientConfig
+from nautilus_trader.adapters.tinvest.factories import TInvestLiveDataClientFactory
+from nautilus_trader.adapters.tinvest.factories import TInvestLiveExecClientFactory
 from nautilus_trader.common.config import InstrumentProviderConfig
 from nautilus_trader.common.config import LoggingConfig
-from nautilus_trader.live.config import LiveDataEngineConfig, LiveExecEngineConfig
+from nautilus_trader.live.config import LiveDataEngineConfig
+from nautilus_trader.live.config import LiveExecEngineConfig
 from nautilus_trader.live.config import TradingNodeConfig
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.identifiers import TraderId

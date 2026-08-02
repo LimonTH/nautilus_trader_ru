@@ -15,18 +15,21 @@
 
 import logging
 import time
-from decimal import Decimal
 from typing import Any
 
 from nautilus_trader.adapters.tinvest.common import TINVEST_VENUE
+from nautilus_trader.adapters.tinvest.constants import _DEFAULT_PRICE_INCREMENT
+from nautilus_trader.adapters.tinvest.constants import _DEFAULT_PRICE_PRECISION
+from nautilus_trader.adapters.tinvest.constants import _INSTRUMENT_TYPE_TO_ASSET_CLASS
+from nautilus_trader.adapters.tinvest.constants import _MAX_PRECISION
 from nautilus_trader.adapters.tinvest.grpc_client import TInvestGrpcClient
 from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.config import InstrumentProviderConfig
-from nautilus_trader.model.identifiers import InstrumentId
-from nautilus_trader.model.identifiers import Symbol
 from nautilus_trader.model.enums import AssetClass
 from nautilus_trader.model.enums import OptionKind
+from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import Symbol
 from nautilus_trader.model.instruments import Equity
 from nautilus_trader.model.instruments import FuturesContract
 from nautilus_trader.model.instruments import Instrument
@@ -35,10 +38,6 @@ from nautilus_trader.model.objects import Currency
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 
-from nautilus_trader.adapters.tinvest.constants import _DEFAULT_PRICE_PRECISION
-from nautilus_trader.adapters.tinvest.constants import _DEFAULT_PRICE_INCREMENT
-from nautilus_trader.adapters.tinvest.constants import _INSTRUMENT_TYPE_TO_ASSET_CLASS
-from nautilus_trader.adapters.tinvest.constants import _MAX_PRECISION
 
 logger = logging.getLogger(__name__)
 
@@ -126,21 +125,7 @@ def _try_dict_to_instrument(inst: dict[str, Any]) -> Instrument | None:
     price_precision, price_increment = _compute_price_precision(min_price_inc)
 
     try:
-        if instrument_type == "share":
-            return Equity(
-                instrument_id=instrument_id,
-                raw_symbol=raw_symbol,
-                currency=currency,
-                price_precision=price_precision,
-                price_increment=price_increment,
-                lot_size=lot_size,
-                isin=isin if isin else None,
-                ts_event=now_ns,
-                ts_init=now_ns,
-                info=inst,
-            )
-
-        elif instrument_type == "etf":
+        if instrument_type == "share" or instrument_type == "etf":
             return Equity(
                 instrument_id=instrument_id,
                 raw_symbol=raw_symbol,
@@ -493,7 +478,8 @@ class TInvestInstrumentProvider(InstrumentProvider):
         ticker: str | None = None,
         instrument_id: str | None = None,
     ) -> object | None:
-        """Find an instrument by figi, ticker, or instrument_id (F10).
+        """
+        Find an instrument by figi, ticker, or instrument_id (F10).
 
         Uses the T-Invest ``GetInstrumentBy`` endpoint and caches the result.
 

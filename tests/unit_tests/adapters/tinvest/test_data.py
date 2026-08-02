@@ -14,6 +14,7 @@
 # -------------------------------------------------------------------------------------------------
 
 import asyncio
+from datetime import UTC
 from typing import cast
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
@@ -23,7 +24,6 @@ import pytest
 
 from nautilus_trader.adapters.tinvest.config import TInvestDataClientConfig
 from nautilus_trader.adapters.tinvest.data import TInvestDataClient
-from nautilus_trader.adapters.tinvest.constants import _CANDLE_INTERVAL_MAP
 from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarSpecification
@@ -32,7 +32,6 @@ from nautilus_trader.model.data import OrderBookDepth10
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.identifiers import InstrumentId
-
 from tests.unit_tests.adapters.tinvest.conftest import make_mock_cache
 from tests.unit_tests.adapters.tinvest.conftest import make_mock_clock
 from tests.unit_tests.adapters.tinvest.conftest import make_mock_grpc_client
@@ -340,17 +339,15 @@ class TestTInvestDataClientConnection:
         mock_stream_class.return_value = mock_stream_instance
 
         # _connect calls asyncio.get_running_loop() — patch it to return our mock
-        with patch("asyncio.get_running_loop", return_value=client._loop):
-            with patch(
-                "nautilus_trader.adapters.tinvest.data._HAS_NATIVE_STREAM_CLASS",
-                True,
-            ):
-                with patch(
-                    "nautilus_trader.adapters.tinvest.data.TInvestMarketDataStream",
-                    mock_stream_class,
-                ):
-                    # Act
-                    await client._connect()
+        with patch("asyncio.get_running_loop", return_value=client._loop), patch(
+            "nautilus_trader.adapters.tinvest.data._HAS_NATIVE_STREAM_CLASS",
+            True,
+        ), patch(
+            "nautilus_trader.adapters.tinvest.data.TInvestMarketDataStream",
+            mock_stream_class,
+        ):
+            # Act
+            await client._connect()
 
         # Assert
         mock_stream_class.assert_called_once_with(grpc._native, client._loop)
@@ -1264,9 +1261,10 @@ class TestDataHelpers:
         assert _datetime_to_ns(None) is None
 
     def test_datetime_to_ns_converts(self):
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from nautilus_trader.adapters.tinvest.data import _datetime_to_ns
-        dt = datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+        dt = datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
         assert _datetime_to_ns(dt) == int(dt.timestamp() * 1_000_000_000)
 
     def test_price_from_quotation_none(self):

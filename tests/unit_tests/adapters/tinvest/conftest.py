@@ -157,7 +157,7 @@ def make_mock_instrument_provider() -> MagicMock:
     provider.load_ids = AsyncMock()
     provider.find_instrument_by_figi = MagicMock(return_value=None)
     provider.find_instrument_by_ticker = MagicMock(return_value=None)
-    provider.get_instruments = MagicMock(return_value=[])
+    provider.get_instruments = MagicMock(return_value={})
     return provider
 
 

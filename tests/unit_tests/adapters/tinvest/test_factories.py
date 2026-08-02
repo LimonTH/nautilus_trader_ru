@@ -165,8 +165,6 @@ class TestTInvestLiveDataClientFactory:
 
     def test_create_passes_correct_args_to_data_client(self):
         """Factory passes all expected arguments to TInvestDataClient constructor."""
-        from nautilus_trader.adapters.tinvest.data import TInvestDataClient
-
         config = _make_data_config()
         mocks = _make_mocks()
 
@@ -252,8 +250,6 @@ class TestTInvestLiveExecClientFactory:
 
     def test_create_with_default_account_id(self):
         """Without account_id → AccountId('TINVEST-0000000000')."""
-        from nautilus_trader.adapters.tinvest.execution import TInvestExecutionClient
-
         config = _make_exec_config(account_id=None)  # No account_id
         mocks = _make_mocks()
 
@@ -287,8 +283,6 @@ class TestTInvestLiveExecClientFactory:
 
     def test_create_with_explicit_account_id(self):
         """With explicit account_id → AccountId(that value)."""
-        from nautilus_trader.adapters.tinvest.execution import TInvestExecutionClient
-
         config = _make_exec_config(account_id="CUSTOM-ACC-42")
         mocks = _make_mocks()
 

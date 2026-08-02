@@ -13,23 +13,27 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from nautilus_trader.adapters.tinvest.common import TINVEST, TINVEST_CLIENT_ID, TINVEST_VENUE
-from nautilus_trader.adapters.tinvest.config import TInvestClientConfig, TInvestDataClientConfig, TInvestExecClientConfig, TInvestInstrumentProviderConfig
-from nautilus_trader.adapters.tinvest.factories import TInvestLiveDataClientFactory, TInvestLiveExecClientFactory
-from nautilus_trader.adapters.tinvest.providers import TInvestInstrumentProvider
+from nautilus_trader.adapters.tinvest.common import TINVEST
+from nautilus_trader.adapters.tinvest.common import TINVEST_CLIENT_ID
+from nautilus_trader.adapters.tinvest.common import TINVEST_VENUE
+from nautilus_trader.adapters.tinvest.config import TInvestClientConfig
+from nautilus_trader.adapters.tinvest.config import TInvestDataClientConfig
+from nautilus_trader.adapters.tinvest.config import TInvestExecClientConfig
+from nautilus_trader.adapters.tinvest.config import TInvestInstrumentProviderConfig
 from nautilus_trader.adapters.tinvest.data import TInvestDataClient
 from nautilus_trader.adapters.tinvest.execution import TInvestExecutionClient
+from nautilus_trader.adapters.tinvest.factories import TInvestLiveDataClientFactory
+from nautilus_trader.adapters.tinvest.factories import TInvestLiveExecClientFactory
 from nautilus_trader.adapters.tinvest.grpc_client import TInvestGrpcClient
+from nautilus_trader.adapters.tinvest.providers import TInvestInstrumentProvider
 
 
 # Native gRPC streaming classes (PyO3)
 try:
-    from nautilus_trader.core.nautilus_pyo3.tinvest import (
-        TInvestMarketDataStream,
-        TInvestOrderStateStream,
-        TInvestPortfolioStream,
-        TInvestPositionsStream,
-    )
+    from nautilus_trader.core.nautilus_pyo3.tinvest import TInvestMarketDataStream
+    from nautilus_trader.core.nautilus_pyo3.tinvest import TInvestOrderStateStream
+    from nautilus_trader.core.nautilus_pyo3.tinvest import TInvestPortfolioStream
+    from nautilus_trader.core.nautilus_pyo3.tinvest import TInvestPositionsStream
 except ImportError:
     TInvestMarketDataStream = None  # type: ignore
     TInvestOrderStateStream = None  # type: ignore
@@ -46,6 +50,7 @@ __all__ = [
     "TInvestDataClientConfig",
     "TInvestExecClientConfig",
     "TInvestExecutionClient",
+    "TInvestGrpcClient",
     "TInvestInstrumentProvider",
     "TInvestInstrumentProviderConfig",
     "TInvestLiveDataClientFactory",

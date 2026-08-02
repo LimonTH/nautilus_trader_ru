@@ -682,7 +682,7 @@ with real money. Always use `--sandbox` when testing order placement.
 
 ## Unit tests
 
-The adapter is covered by 193 unit tests under
+The adapter is covered by 274 unit tests under
 [`tests/unit_tests/adapters/tinvest/`](tests/unit_tests/adapters/tinvest/test_config.py). Because the
 T-Invest API is not available in CI, all tests use mocks (`unittest.mock`).
 
@@ -690,8 +690,8 @@ T-Invest API is not available in CI, all tests use mocks (`unittest.mock`).
 |----------------------------------------------------------------------|------------------------------------------|-------|
 | [`test_config.py`](tests/unit_tests/adapters/tinvest/test_config.py) | Configuration classes and conversions.   | 21    |
 | [`test_common.py`](tests/unit_tests/adapters/tinvest/test_common.py) | Venue/client-id constants.               | 4     |
-| [`test_data.py`](tests/unit_tests/adapters/tinvest/test_data.py)     | Data client, subscriptions, callbacks, native stream processing, historical requests. | 41 |
-| [`test_execution.py`](tests/unit_tests/adapters/tinvest/test_execution.py) | Order submission/management, reports, account state, native streams. | 27 |
+| [`test_data.py`](tests/unit_tests/adapters/tinvest/test_data.py)     | Data client, subscriptions, callbacks, native stream processing, historical requests. | 60 |
+| [`test_execution.py`](tests/unit_tests/adapters/tinvest/test_execution.py) | Order submission/management, reports, account state, native streams. | 89 |
 | [`test_factories.py`](tests/unit_tests/adapters/tinvest/test_factories.py) | Shared gRPC client singleton and factories. | 8  |
 | [`test_grpc_client.py`](tests/unit_tests/adapters/tinvest/test_grpc_client.py) | gRPC wrapper methods, polling, subscriptions, execution methods. | 44 |
 | [`test_providers.py`](tests/unit_tests/adapters/tinvest/test_providers.py) | Price precision, instrument conversion, instrument provider. | 48 |

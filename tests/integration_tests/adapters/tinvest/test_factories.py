@@ -13,17 +13,9 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from nautilus_trader.adapters.tinvest.factories import (
-    get_cached_tinvest_grpc_client,
-    get_cached_tinvest_instrument_provider,
-    TInvestLiveDataClientFactory,
-    TInvestLiveExecClientFactory,
-)
-from nautilus_trader.adapters.tinvest.config import (
-    TInvestClientConfig,
-    TInvestDataClientConfig,
-    TInvestExecClientConfig,
-)
+from nautilus_trader.adapters.tinvest.factories import TInvestLiveDataClientFactory
+from nautilus_trader.adapters.tinvest.factories import TInvestLiveExecClientFactory
+from nautilus_trader.adapters.tinvest.factories import get_cached_tinvest_grpc_client
 
 
 class TestTInvestFactories:

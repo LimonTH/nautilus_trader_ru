@@ -18,14 +18,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from nautilus_trader.adapters.tinvest.providers import TInvestInstrumentProvider
 from nautilus_trader.adapters.tinvest.providers import _compute_price_precision
 from nautilus_trader.adapters.tinvest.providers import _try_dict_to_instrument
-from nautilus_trader.adapters.tinvest.providers import TInvestInstrumentProvider
 from nautilus_trader.config import InstrumentProviderConfig
 from nautilus_trader.model.enums import OptionKind
 from nautilus_trader.model.identifiers import InstrumentId
-from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.identifiers import Symbol
+from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.instruments import Equity
 from nautilus_trader.model.instruments import FuturesContract
 from nautilus_trader.model.instruments import OptionContract
@@ -125,7 +125,7 @@ class TestComputePricePrecision:
         assert precision <= 16
 
     def test_units_as_string(self):
-        """units may arrive as string from serialization layer."""
+        """Units may arrive as string from serialization layer."""
         precision, increment = _compute_price_precision({"units": "5", "nano": 0})
         assert precision == 0
         assert increment == Price(5.0, 0)
@@ -165,7 +165,7 @@ class TestTryDictToInstrument:
     # --- Type-specific conversions ---
 
     def test_share_conversion(self, base_dict):
-        """share → Equity."""
+        """Share → Equity."""
         result = _try_dict_to_instrument(base_dict)
         assert isinstance(result, Equity)
         assert result.id == InstrumentId(Symbol("BBG004730N88"), Venue("TINVEST"))
@@ -173,7 +173,7 @@ class TestTryDictToInstrument:
         assert result.lot_size == Quantity.from_int(10)
 
     def test_etf_conversion(self, base_dict):
-        """etf → Equity."""
+        """Etf → Equity."""
         base_dict["instrument_type"] = "etf"
         base_dict["figi"] = "BBG000BD5B02"
         base_dict["ticker"] = "FXUS"
@@ -182,7 +182,7 @@ class TestTryDictToInstrument:
         assert result.raw_symbol == Symbol("FXUS")
 
     def test_bond_conversion(self, base_dict):
-        """bond → Equity (Bonds are represented as Equity)."""
+        """Bond → Equity (Bonds are represented as Equity)."""
         base_dict["instrument_type"] = "bond"
         base_dict["figi"] = "BBG00V9V2XH1"
         base_dict["ticker"] = "SU26238"
@@ -191,7 +191,7 @@ class TestTryDictToInstrument:
         assert result.raw_symbol == Symbol("SU26238")
 
     def test_future_conversion(self, base_dict):
-        """future → FuturesContract."""
+        """Future → FuturesContract."""
         base_dict["instrument_type"] = "future"
         base_dict["figi"] = "FUTSBER0125"
         base_dict["ticker"] = "SBH5"
@@ -202,7 +202,7 @@ class TestTryDictToInstrument:
         assert result.underlying == "SBH5"
 
     def test_currency_conversion(self, base_dict):
-        """currency → Equity (Currency instruments are represented as Equity)."""
+        """Currency → Equity (Currency instruments are represented as Equity)."""
         base_dict["instrument_type"] = "currency"
         base_dict["figi"] = "BBG0013HGFT4"
         base_dict["ticker"] = "USDRUB"
@@ -214,14 +214,14 @@ class TestTryDictToInstrument:
         assert str(result.quote_currency) == "USD"
 
     def test_option_direction_1_put(self, base_dict):
-        """option direction=1 → OptionContract with PUT kind."""
+        """Option direction=1 → OptionContract with PUT kind."""
         opt = _make_option_dict(direction=1)
         result = _try_dict_to_instrument(opt)
         assert isinstance(result, OptionContract)
         assert result.option_kind == OptionKind.PUT
 
     def test_option_direction_2_call(self, base_dict):
-        """option direction=2 → OptionContract with CALL kind."""
+        """Option direction=2 → OptionContract with CALL kind."""
         opt = _make_option_dict(direction=2)
         result = _try_dict_to_instrument(opt)
         assert isinstance(result, OptionContract)
@@ -611,7 +611,7 @@ class TestTInvestInstrumentProvider:
         assert result == {"a": 1, "b": 2}
 
     def test_count_property(self, mock_clock, mock_grpc_client):
-        """count reflects the number of cached instruments."""
+        """Count reflects the number of cached instruments."""
         provider = self._make_provider(mock_clock, mock_grpc_client)
         assert provider.count == 0
 

@@ -13,7 +13,8 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-"""Python wrapper for T-Invest gRPC client.
+"""
+Python wrapper for T-Invest gRPC client.
 
 This module provides a Python interface to the Rust TInvestGrpcClient
 via PyO3 bindings (nautilus_pyo3.tinvest.TInvestGrpcClient) when available,
@@ -24,9 +25,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable
+from typing import Any
+from typing import Callable
 
 from nautilus_trader.adapters.tinvest.config import TInvestClientConfig
+
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +58,8 @@ class TInvestGrpcClient:
         self._native_streaming = self._detect_native_streaming()
 
     def _detect_native_streaming(self) -> bool:
-        """Detect whether native gRPC streaming is available via PyO3.
+        """
+        Detect whether native gRPC streaming is available via PyO3.
 
         Returns
         -------
@@ -76,7 +80,8 @@ class TInvestGrpcClient:
         return False
 
     def _has_native_streaming(self) -> bool:
-        """Check if native gRPC streaming is available via PyO3.
+        """
+        Check if native gRPC streaming is available via PyO3.
 
         Returns
         -------
@@ -140,7 +145,8 @@ class TInvestGrpcClient:
     # -- Data Methods -------------------------------------------------------------------------
 
     async def request_instruments(self) -> list[dict]:
-        """Load all instruments from T-Invest API.
+        """
+        Load all instruments from T-Invest API.
 
         Returns
         -------
@@ -155,7 +161,8 @@ class TInvestGrpcClient:
         return []
 
     async def request_instrument(self, figi: str) -> dict | None:
-        """Load a single instrument by FIGI.
+        """
+        Load a single instrument by FIGI.
 
         Parameters
         ----------
@@ -185,7 +192,8 @@ class TInvestGrpcClient:
         to_ts: int | None = None,
         limit: int | None = None,
     ) -> list[dict]:
-        """Request historical candles.
+        """
+        Request historical candles.
 
         Parameters
         ----------
@@ -218,7 +226,8 @@ class TInvestGrpcClient:
         return []
 
     async def request_order_book(self, figi: str, depth: int = 10) -> dict | None:
-        """Request order book.
+        """
+        Request order book.
 
         Parameters
         ----------
@@ -244,7 +253,8 @@ class TInvestGrpcClient:
         from_ts: int | None = None,
         to_ts: int | None = None,
     ) -> list[dict]:
-        """Request last trades.
+        """
+        Request last trades.
 
         Parameters
         ----------
@@ -276,7 +286,8 @@ class TInvestGrpcClient:
         type_of_price: int = 1,
         length: int = 0,
     ) -> list[dict]:
-        """Get technical analysis indicators for an instrument (F5).
+        """
+        Get technical analysis indicators for an instrument (F5).
 
         This is a heavy gRPC call — the Rust client executes it with retry
         and exponential backoff. Requires an ``instrument_uid`` (FIGI/ticker
@@ -328,7 +339,8 @@ class TInvestGrpcClient:
         interval_ms: int,
         callback: Callable,
     ) -> None:
-        """Start a polling loop for a subscription.
+        """
+        Start a polling loop for a subscription.
 
         Parameters
         ----------
@@ -370,7 +382,8 @@ class TInvestGrpcClient:
         self._polling_tasks[key] = asyncio.ensure_future(_poll_loop())
 
     def _stop_polling(self, key: str) -> None:
-        """Stop a polling loop for a subscription.
+        """
+        Stop a polling loop for a subscription.
 
         Parameters
         ----------
@@ -390,7 +403,8 @@ class TInvestGrpcClient:
         depth: int = 10,
         callback: Callable | None = None,
     ) -> None:
-        """Subscribe to order book updates.
+        """
+        Subscribe to order book updates.
 
         Uses native gRPC streaming when available (PyO3 with
         has_native_streaming=True), falling back to REST polling.
@@ -434,7 +448,8 @@ class TInvestGrpcClient:
             logger.warning(f"subscribe_order_book: native client not available for {figi}")
 
     async def unsubscribe_order_book(self, figi: str, depth: int = 10) -> None:
-        """Unsubscribe from order book updates.
+        """
+        Unsubscribe from order book updates.
 
         Parameters
         ----------
@@ -452,7 +467,8 @@ class TInvestGrpcClient:
         figi: str,
         callback: Callable | None = None,
     ) -> None:
-        """Subscribe to trade stream.
+        """
+        Subscribe to trade stream.
 
         Uses native gRPC streaming when available, falling back to REST polling.
 
@@ -493,7 +509,8 @@ class TInvestGrpcClient:
             logger.warning(f"subscribe_trades: native client not available for {figi}")
 
     async def unsubscribe_trades(self, figi: str) -> None:
-        """Unsubscribe from trade stream.
+        """
+        Unsubscribe from trade stream.
 
         Parameters
         ----------
@@ -510,7 +527,8 @@ class TInvestGrpcClient:
         interval: int = 1,
         callback: Callable | None = None,
     ) -> None:
-        """Subscribe to candle stream.
+        """
+        Subscribe to candle stream.
 
         Uses native gRPC streaming when available, falling back to REST polling.
 
@@ -581,7 +599,8 @@ class TInvestGrpcClient:
             logger.warning(f"subscribe_candles: native client not available for {figi}")
 
     async def unsubscribe_candles(self, figi: str, interval: int = 1) -> None:
-        """Unsubscribe from candle stream.
+        """
+        Unsubscribe from candle stream.
 
         Parameters
         ----------
@@ -606,7 +625,8 @@ class TInvestGrpcClient:
         order_type: int = 2,
         order_id: str | None = None,
     ) -> dict | None:
-        """Submit an order.
+        """
+        Submit an order.
 
         Parameters
         ----------
@@ -654,7 +674,8 @@ class TInvestGrpcClient:
         order_type: int = 2,
         order_id: str | None = None,
     ) -> dict | None:
-        """Submit an order asynchronously without waiting for the exchange response.
+        """
+        Submit an order asynchronously without waiting for the exchange response.
 
         The T-Invest ``PostOrderAsync`` method returns an idempotency
         ``order_request_id`` immediately. The final order state is delivered
@@ -698,7 +719,8 @@ class TInvestGrpcClient:
         return None
 
     async def cancel_order(self, account_id: str, order_id: str) -> dict | None:
-        """Cancel an order.
+        """
+        Cancel an order.
 
         Parameters
         ----------
@@ -726,7 +748,8 @@ class TInvestGrpcClient:
         quantity: int,
         price: float | None = None,
     ) -> dict | None:
-        """Replace (modify) an existing order.
+        """
+        Replace (modify) an existing order.
 
         Parameters
         ----------
@@ -759,7 +782,8 @@ class TInvestGrpcClient:
         return None
 
     async def get_order_state(self, account_id: str, order_id: str) -> dict | None:
-        """Get order state.
+        """
+        Get order state.
 
         Parameters
         ----------
@@ -780,7 +804,8 @@ class TInvestGrpcClient:
         return None
 
     async def get_orders(self, account_id: str) -> list[dict]:
-        """Get all active orders.
+        """
+        Get all active orders.
 
         Parameters
         ----------
@@ -799,7 +824,8 @@ class TInvestGrpcClient:
         return []
 
     async def get_portfolio(self, account_id: str) -> dict | None:
-        """Get portfolio.
+        """
+        Get portfolio.
 
         Parameters
         ----------
@@ -818,7 +844,8 @@ class TInvestGrpcClient:
         return None
 
     async def get_positions(self, account_id: str) -> dict | None:
-        """Get positions.
+        """
+        Get positions.
 
         Parameters
         ----------
@@ -843,7 +870,8 @@ class TInvestGrpcClient:
         from_ts: int | None = None,
         to_ts: int | None = None,
     ) -> dict | None:
-        """Get operations for the account.
+        """
+        Get operations for the account.
 
         Parameters
         ----------
@@ -886,7 +914,8 @@ class TInvestGrpcClient:
         without_trades: bool = False,
         without_overnights: bool = False,
     ) -> dict | None:
-        """Get operations for the account with explicit pagination (F6).
+        """
+        Get operations for the account with explicit pagination (F6).
 
         Parameters
         ----------
@@ -937,7 +966,8 @@ class TInvestGrpcClient:
         return None
 
     async def get_withdraw_limits(self, account_id: str) -> dict | None:
-        """Get the available withdraw limits for an account (F7).
+        """
+        Get the available withdraw limits for an account (F7).
 
         Parameters
         ----------
@@ -956,7 +986,8 @@ class TInvestGrpcClient:
         return None
 
     async def get_user_tariff(self) -> dict | None:
-        """Get the current user tariff / request limits (F8).
+        """
+        Get the current user tariff / request limits (F8).
 
         Returns
         -------
@@ -977,7 +1008,8 @@ class TInvestGrpcClient:
         direction: int,
         quantity: int,
     ) -> dict | None:
-        """Estimate the cost/price of an order (F9).
+        """
+        Estimate the cost/price of an order (F9).
 
         Parameters
         ----------
@@ -1016,7 +1048,8 @@ class TInvestGrpcClient:
         id: str,
         class_code: str | None = None,
     ) -> dict | None:
-        """Find an instrument by figi/ticker/uid (F10).
+        """
+        Find an instrument by figi/ticker/uid (F10).
 
         Parameters
         ----------
@@ -1052,7 +1085,8 @@ class TInvestGrpcClient:
         from_ts: int | None = None,
         to_ts: int | None = None,
     ) -> list[dict]:
-        """Get the trading schedules for an exchange (F11).
+        """
+        Get the trading schedules for an exchange (F11).
 
         Parameters
         ----------
@@ -1079,7 +1113,8 @@ class TInvestGrpcClient:
         return []
 
     async def get_trading_statuses(self, instrument_ids: list[str]) -> list[dict]:
-        """Get trading statuses for multiple instruments (F11).
+        """
+        Get trading statuses for multiple instruments (F11).
 
         Parameters
         ----------
@@ -1103,7 +1138,8 @@ class TInvestGrpcClient:
         from_ts: int,
         to_ts: int,
     ) -> list[dict]:
-        """Get the accrued interest (coupon income) for a bond (F12).
+        """
+        Get the accrued interest (coupon income) for a bond (F12).
 
         Parameters
         ----------
@@ -1130,7 +1166,8 @@ class TInvestGrpcClient:
         return []
 
     async def get_signals(self, strategy_id: str | None = None) -> list[dict]:
-        """Get available signal strategies (F15, NOT_APPLICABLE).
+        """
+        Get available signal strategies (F15, NOT_APPLICABLE).
 
         The SignalsService exposes analytical signals which have no Nautilus
         event-model equivalent (ADR-5). This is a contract-completeness stub
@@ -1153,7 +1190,8 @@ class TInvestGrpcClient:
         return []
 
     async def get_accounts(self) -> list[dict]:
-        """Get user accounts.
+        """
+        Get user accounts.
 
         Returns
         -------
@@ -1182,7 +1220,8 @@ class TInvestGrpcClient:
         exchange_order_type: int = 0,
         take_profit_type: int = 0,
     ) -> dict | None:
-        """Submit a stop-order.
+        """
+        Submit a stop-order.
 
         Parameters
         ----------
@@ -1247,7 +1286,8 @@ class TInvestGrpcClient:
         exchange_order_type: int = 0,
         take_profit_type: int = 0,
     ) -> dict | None:
-        """Replace a stop-order (F4).
+        """
+        Replace a stop-order (F4).
 
         The T-Invest StopOrdersService has no ``ReplaceStopOrder`` RPC, so a
         replacement is implemented as *cancel the old stop-order* followed by
@@ -1309,7 +1349,8 @@ class TInvestGrpcClient:
         account_id: str,
         stop_order_id: str,
     ) -> dict | None:
-        """Cancel a stop-order.
+        """
+        Cancel a stop-order.
 
         Parameters
         ----------
@@ -1336,7 +1377,8 @@ class TInvestGrpcClient:
         self,
         account_id: str,
     ) -> list[dict]:
-        """Get all active stop-orders for an account.
+        """
+        Get all active stop-orders for an account.
 
         Parameters
         ----------
@@ -1357,7 +1399,8 @@ class TInvestGrpcClient:
     # -- Sandbox Methods ----------------------------------------------------------------------
 
     async def open_sandbox_account(self, name: str | None = None) -> dict | None:
-        """Open a sandbox account.
+        """
+        Open a sandbox account.
 
         Parameters
         ----------
@@ -1376,7 +1419,8 @@ class TInvestGrpcClient:
         return None
 
     async def close_sandbox_account(self, account_id: str) -> dict | None:
-        """Close a sandbox account.
+        """
+        Close a sandbox account.
 
         Parameters
         ----------
@@ -1399,7 +1443,8 @@ class TInvestGrpcClient:
         account_id: str,
         amount: dict,
     ) -> dict | None:
-        """Deposit money into sandbox account.
+        """
+        Deposit money into sandbox account.
 
         Parameters
         ----------
