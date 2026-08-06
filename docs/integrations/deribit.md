@@ -209,7 +209,7 @@ subscriber to both the combo and an underlying leg sees one combo tick plus one 
 that combo trade, not duplicate ticks against the same instrument.
 
 To have the Deribit data client open the real leg trade channels alongside a combo trade
-subscription, pass `params={"subscribe_combo_legs": True}` to `subscribe_trade_ticks`. When
+subscription, pass `params={"subscribe_combo_legs": True}` to `subscribe_trades`. When
 unsubscribing that combo trade stream, Nautilus also closes the leg subscriptions opened by
 this opt-in.
 
@@ -310,22 +310,25 @@ The data client chooses the order book interval as follows:
 3. Uses Deribit's public `100ms` grouped feed when the connection is not authenticated.
 
 ```python
-from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model import BookType
+from nautilus_trader.model import InstrumentId
 
 instrument_id = InstrumentId.from_str("BTC-PERPETUAL.DERIBIT")
 
 # Public 100ms aggregated feed when no API credentials are configured.
-strategy.subscribe_order_book_deltas(instrument_id)
+strategy.subscribe_book_deltas(instrument_id, BookType.L2_MBP)
 
 # Raw feed. This is also the authenticated default when no interval is supplied.
-strategy.subscribe_order_book_deltas(
+strategy.subscribe_book_deltas(
     instrument_id,
+    BookType.L2_MBP,
     params={"interval": "raw"},
 )
 
 # Force an aggregated feed on an authenticated connection.
-strategy.subscribe_order_book_deltas(
+strategy.subscribe_book_deltas(
     instrument_id,
+    BookType.L2_MBP,
     params={"interval": "100ms", "depth": 10},
 )
 ```
@@ -524,6 +527,50 @@ Deribit because this continuous model does not map to a discrete period.
 
 ## Deribit specific data
 
+### Book summaries
+
+Request `DeribitBookSummary` custom data to fetch one bulk snapshot filtered by currency and product
+kind. Each response item includes the Nautilus instrument ID, implied volatility, open interest,
+prices, volume, and other fields returned by `public/get_book_summary_by_currency`.
+
+The actor or strategy receives the complete response through one `on_historical_data` callback.
+Each item is a `CustomData` wrapper containing a `DeribitBookSummary` in its `data` field:
+
+```python
+from nautilus_trader.adapters.deribit import DERIBIT_CLIENT_ID
+from nautilus_trader.adapters.deribit import DeribitBookSummary
+from nautilus_trader.model import CustomData
+from nautilus_trader.model import DataType
+
+
+def on_start(self) -> None:
+    self.request_data(
+        DataType(
+            DeribitBookSummary.__name__,
+            metadata={"currency": "BTC", "kind": "option"},
+        ),
+        DERIBIT_CLIENT_ID,
+    )
+
+
+def on_historical_data(self, data: list[CustomData]) -> None:
+    for item in data:
+        summary = item.data
+        if isinstance(summary, DeribitBookSummary):
+            self.log.info(
+                f"{summary.instrument_id}: mark_iv={summary.mark_iv}, "
+                f"open_interest={summary.open_interest}",
+            )
+```
+
+The `currency` metadata field is required. The optional `kind` field defaults to `option`.
+Decimal‑backed venue fields, such as `mark_iv` and `open_interest`, are exposed to Python as strings
+or `None`. An empty response invokes `on_historical_data` once with an empty list. A failed venue
+request also invokes the callback with an empty list after logging an error. A request rejected
+before it reaches the venue, such as one missing `currency`, produces no callback.
+
+### Volatility index
+
 The adapter emits `DeribitVolatilityIndex` custom data from Deribit's
 `deribit_volatility_index.{index_name}` WebSocket channel. Deribit provides
 volatility index streams such as `btc_usd` and `eth_usd`.
@@ -535,16 +582,16 @@ volatility index streams such as `btc_usd` and `eth_usd`.
 | `ts_event`   | `int`   | UNIX timestamp in nanoseconds when the update occurred.  |
 | `ts_init`    | `int`   | UNIX timestamp in nanoseconds when the object was built. |
 
-Subscribe from an actor or strategy with `DataType(DeribitVolatilityIndex)`.
+Subscribe from an actor or strategy with `DataType(DeribitVolatilityIndex.__name__)`.
 The `index_name` metadata key is required:
 
 ```python
 from nautilus_trader.adapters.deribit import DeribitVolatilityIndex
 from nautilus_trader.model import ClientId
-from nautilus_trader.model.data import DataType
+from nautilus_trader.model import DataType
 
 self.subscribe_data(
-    data_type=DataType(DeribitVolatilityIndex, metadata={"index_name": "btc_usd"}),
+    data_type=DataType(DeribitVolatilityIndex.__name__, metadata={"index_name": "btc_usd"}),
     client_id=ClientId.from_str("DERIBIT"),
 )
 ```

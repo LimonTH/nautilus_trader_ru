@@ -27,26 +27,26 @@ consumed through the Rust trait surface.
 
 ## Examples
 
-Python v2 examples live in
-[`python/examples/lighter/`](https://github.com/nautechsystems/nautilus_trader/tree/develop/python/examples/lighter/)
+Python examples live in
+[`examples/live/lighter/`](https://github.com/nautechsystems/nautilus_trader/tree/develop/examples/live/lighter/)
 and default to a dry build. Pass `--run` to connect; the execution tester also requires
 `--live-orders` to disable `dry_run`.
 
+From the repository root:
+
 ```bash
-cd python
-.venv/bin/python examples/lighter/data_tester.py --lighter-environment testnet
-.venv/bin/python examples/lighter/exec_tester.py --lighter-environment testnet
+.venv/bin/python examples/live/lighter/data_tester.py --lighter-environment testnet
+.venv/bin/python examples/live/lighter/exec_tester.py --lighter-environment testnet
 ```
 
-To connect to mainnet with explicit instruments:
+From the repository root, connect to mainnet with explicit instruments:
 
 ```bash
-cd python
-.venv/bin/python examples/lighter/data_tester.py \
+.venv/bin/python examples/live/lighter/data_tester.py \
     --lighter-environment mainnet \
     --instrument BTC-PERP.LIGHTER \
     --run
-.venv/bin/python examples/lighter/exec_tester.py \
+.venv/bin/python examples/live/lighter/exec_tester.py \
     --lighter-environment mainnet \
     --instrument DOGE-PERP.LIGHTER \
     --run
@@ -384,6 +384,11 @@ Authenticated inactive-order and fill pagination rejects repeated cursors and st
 pages. Fill reconciliation remains repeatable across calls while suppressing fills already emitted
 from the live WebSocket stream. Historical order and fill reports bind a mapped client index only
 to its matching venue order ID so reused numeric indexes cannot merge unrelated lifecycles.
+
+A strategy that opens a position immediately on start can trigger a transient position-check
+discrepancy warning (`cached=0, venue=N`) when the venue's `account_all_positions` frame arrives a
+few milliseconds before the matching fill event is processed. The warning self-resolves once the
+fill applies; no reconciliation orders are generated.
 
 ## Account and position management
 

@@ -90,11 +90,11 @@ The Nautilus crates are published to
 
 ```toml
 [dependencies]
-nautilus-backtest = "0.60"
-nautilus-common = "0.60"
-nautilus-execution = "0.60"
-nautilus-model = { version = "0.60", features = ["stubs"] }
-nautilus-trading = { version = "0.60", features = ["examples"] }
+nautilus-backtest = "0.61"
+nautilus-common = "0.61"
+nautilus-execution = "0.61"
+nautilus-model = { version = "0.61", features = ["stubs"] }
+nautilus-trading = { version = "0.61", features = ["examples"] }
 
 anyhow = "1"
 log = "0.4"
@@ -104,8 +104,8 @@ For live trading, add the live crate and the adapter for your venue:
 
 ```toml
 [dependencies]
-nautilus-live = "0.60"
-nautilus-okx = "0.60"
+nautilus-live = "0.61"
+nautilus-okx = "0.61"
 ```
 
 To track the latest development branch, point all Nautilus dependencies at the
@@ -140,9 +140,10 @@ places (e.g. `0.00000001`).
 
 ### Memory allocator
 
-The Python wheels and the `nautilus` CLI use [mimalloc](https://crates.io/crates/mimalloc)
-for Rust allocations. A Rust binary chooses its own allocator, so add mimalloc to yours
-to match:
+The `nautilus` CLI and Python wheels on Linux and Windows use
+[mimalloc](https://crates.io/crates/mimalloc) for Rust allocations. macOS Python wheels use the
+system allocator to remain compatible with Python packages that embed their own allocator. A Rust
+binary chooses its own allocator, so add mimalloc to yours to match:
 
 ```toml
 [dependencies]
@@ -374,7 +375,7 @@ and tests. It is not a first-class extension path for adding native
 strategies. For custom native components, use pure Rust.
 
 ```python
-from nautilus_trader.core.nautilus_pyo3.trading import GridMarketMakerConfig
+from nautilus_trader.trading import GridMarketMakerConfig
 
 config = GridMarketMakerConfig(
     instrument_id=InstrumentId.from_str("BTC-USDT-SWAP.OKX"),

@@ -568,7 +568,7 @@ fn dispatch_maker_fills(
 }
 
 fn is_user_maker_order(order: &PolymarketMakerOrder, ctx: &WsDispatchContext<'_>) -> bool {
-    order.maker_address == ctx.user_address || order.owner == ctx.user_api_key
+    order.is_owned_by(ctx.user_address, ctx.user_api_key)
 }
 
 fn dispatch_taker_fill(
@@ -1301,6 +1301,46 @@ mod tests {
         }
 
         assert!(!fill_tracker.has_pending_report(&venue_order_id));
+    }
+
+    #[rstest]
+    fn test_dispatch_maker_fill_owned_by_case_variant_address() {
+        let mut trade: PolymarketUserTrade = load("ws_user_trade.json");
+        trade.trader_side = PolymarketLiquiditySide::Maker;
+        let configured_address = trade.maker_orders[0].maker_address.clone();
+        let case_variant_address = configured_address
+            .to_ascii_uppercase()
+            .replacen("0X", "0x", 1);
+        assert_ne!(case_variant_address, configured_address);
+        trade.maker_orders[0].maker_address = case_variant_address;
+        let foreign_api_key = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+        assert_ne!(trade.maker_orders[0].owner, foreign_api_key);
+
+        let venue_order_id = VenueOrderId::from(trade.maker_orders[0].order_id.as_str());
+        let token_instruments = AtomicMap::new();
+        token_instruments.insert(trade.maker_orders[0].asset_id, test_instrument());
+        let fill_tracker = OrderFillTrackerMap::new();
+        let pending_submits = PendingSubmitTracker::default();
+        let order_identities = OrderIdentityRegistry::default();
+        let emitter = test_emitter();
+        let ctx = WsDispatchContext {
+            token_instruments: &token_instruments,
+            fill_tracker: &fill_tracker,
+            pending_submits: &pending_submits,
+            order_identities: &order_identities,
+            emitter: &emitter,
+            account_id: AccountId::from("POLY-001"),
+            clock: nautilus_core::time::get_atomic_clock_realtime(),
+            user_address: &configured_address,
+            user_api_key: foreign_api_key,
+        };
+        let mut state = WsDispatchState::default();
+
+        let _ = dispatch_user_message(&UserWsMessage::Trade(trade), &ctx, &mut state);
+
+        let fills = fill_tracker.pending_fills_for(&venue_order_id);
+        assert_eq!(fills.len(), 1);
+        assert_eq!(fills[0].venue_order_id, venue_order_id);
     }
 
     #[rstest]

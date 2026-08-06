@@ -196,7 +196,7 @@ fn test_turmoil_real_socket_basic_connect(socket_config: SocketConfig) {
     sim.host("server", echo_server);
 
     sim.client("client", async move {
-        let client = SocketClient::connect(socket_config, None, None, None)
+        let client = SocketClient::connect(socket_config, None)
             .await
             .expect("Should connect");
 
@@ -232,6 +232,11 @@ fn test_turmoil_real_socket_reconnection(mut socket_config: SocketConfig) {
     socket_config.reconnect_delay_initial_ms = Some(100);
     let received = Arc::new(Mutex::new(Vec::new()));
     attach_message_capture(&mut socket_config, &received);
+    let reconnections = Arc::new(AtomicUsize::new(0));
+    let reconnections_for_handler = Arc::clone(&reconnections);
+    let post_reconnection = Arc::new(move || {
+        reconnections_for_handler.fetch_add(1, Ordering::SeqCst);
+    });
 
     let mut sim = seeded_builder(RECONNECTION_SEED).build();
 
@@ -270,9 +275,11 @@ fn test_turmoil_real_socket_reconnection(mut socket_config: SocketConfig) {
     });
 
     sim.client("client", async move {
-        let client = SocketClient::connect(socket_config, None, None, None)
+        let client = SocketClient::connect(socket_config, Some(post_reconnection))
             .await
             .expect("Should connect");
+
+        assert_eq!(reconnections.load(Ordering::SeqCst), 0);
 
         client
             .send_bytes(b"first_msg".to_vec())
@@ -293,6 +300,7 @@ fn test_turmoil_real_socket_reconnection(mut socket_config: SocketConfig) {
             wait_for(|| client.is_active()).await,
             "Client should reconnect after server close"
         );
+        assert_eq!(reconnections.load(Ordering::SeqCst), 1);
 
         client
             .send_bytes(b"second_msg".to_vec())
@@ -305,6 +313,8 @@ fn test_turmoil_real_socket_reconnection(mut socket_config: SocketConfig) {
 
         client.send_bytes(b"close".to_vec()).await.ok();
         client.close().await;
+
+        assert_eq!(reconnections.load(Ordering::SeqCst), 1);
 
         Ok(())
     });
@@ -333,7 +343,7 @@ fn test_turmoil_socket_unstable_reconnects_exhaust_attempts(mut socket_config: S
     });
 
     sim.client("client", async move {
-        let client = SocketClient::connect(socket_config, None, None, None)
+        let client = SocketClient::connect(socket_config, None)
             .await
             .expect("Initial socket connection should succeed");
         let started_at = tokio::time::Instant::now();
@@ -376,7 +386,7 @@ fn test_turmoil_socket_stable_reconnect_resets_attempts(mut socket_config: Socke
     });
 
     sim.client("client", async move {
-        let client = SocketClient::connect(socket_config, None, None, None)
+        let client = SocketClient::connect(socket_config, None)
             .await
             .expect("Initial socket connection should succeed");
 
@@ -409,7 +419,7 @@ fn test_turmoil_real_socket_network_partition(mut socket_config: SocketConfig) {
     sim.host("server", echo_server);
 
     sim.client("client", async move {
-        let client = SocketClient::connect(socket_config, None, None, None)
+        let client = SocketClient::connect(socket_config, None)
             .await
             .expect("Should connect");
 
@@ -464,7 +474,7 @@ fn test_turmoil_real_socket_close_during_reconnect(mut socket_config: SocketConf
     sim.host("server", echo_server);
 
     sim.client("client", async move {
-        let client = SocketClient::connect(socket_config, None, None, None)
+        let client = SocketClient::connect(socket_config, None)
             .await
             .expect("Should connect");
 
@@ -504,7 +514,7 @@ fn test_turmoil_real_socket_disconnect_during_backoff(mut socket_config: SocketC
     sim.host("server", echo_server);
 
     sim.client("client", async move {
-        let client = SocketClient::connect(socket_config, None, None, None)
+        let client = SocketClient::connect(socket_config, None)
             .await
             .expect("Should connect");
 
@@ -554,7 +564,7 @@ fn test_turmoil_socket_repeated_drops_preserve_message_order(
     sim.host("server", echo_once_then_drop_server);
 
     sim.client("client", async move {
-        let client = SocketClient::connect(socket_config, None, None, None)
+        let client = SocketClient::connect(socket_config, None)
             .await
             .expect("Should connect");
 

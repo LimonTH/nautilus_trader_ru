@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Generic retry mechanism for network operations.
+//! Retry policy for asynchronous network operations.
 
 use std::{future::Future, marker::PhantomData, time::Duration};
 
@@ -36,11 +36,12 @@ pub struct RetryConfig {
     pub backoff_factor: f64,
     /// Maximum jitter in milliseconds to add to delays.
     pub jitter_ms: u64,
-    /// Optional timeout for individual operations in milliseconds.
-    /// If None, no timeout is applied.
+    /// Optional timeout for individual operations in milliseconds. `None` disables the timeout.
     pub operation_timeout_ms: Option<u64>,
-    /// Whether the first retry should happen immediately without delay.
-    /// Should be false for HTTP/order operations, true for connection operations.
+    /// Whether the first retry occurs without delay.
+    ///
+    /// Connection operations typically enable this, while HTTP and order operations typically
+    /// retain a delay.
     pub immediate_first: bool,
     /// Optional maximum total elapsed time across all attempts and retry delays in milliseconds.
     /// When set, this deadline also bounds an in-flight operation.
@@ -62,9 +63,9 @@ impl Default for RetryConfig {
     }
 }
 
-/// Generic retry manager for network operations.
+/// A stateless, thread‑safe retry manager for network operations.
 ///
-/// Stateless and thread-safe - each operation maintains its own backoff state.
+/// Each execution maintains independent backoff and elapsed‑time state.
 #[derive(Clone, Debug)]
 pub struct RetryManager<E> {
     config: RetryConfig,
@@ -97,12 +98,13 @@ where
     /// Executes an operation with retry logic and optional cancellation.
     ///
     /// Cancellation is checked at three points:
-    /// (1) Before each operation attempt.
-    /// (2) During operation execution (via `tokio::select!`).
-    /// (3) During retry delays.
+    ///
+    /// - Before each operation attempt.
+    /// - During operation execution through `tokio::select!`.
+    /// - During retry delays.
     ///
     /// Cancellation mid-execution takes effect immediately by dropping the in-flight
-    /// operation future. For non-idempotent operations (e.g. an order already on the
+    /// operation future. For non‑idempotent operations (e.g. an order already on the
     /// wire) the outcome of the abandoned attempt is unknown to the caller.
     ///
     /// # Errors
@@ -222,7 +224,7 @@ where
                 attempt_future.await
             }?;
 
-            match result {
+            let (e, minimum_delay, timed_out) = match result {
                 Ok(Ok(success)) => {
                     if attempt > 0 {
                         log::trace!(
@@ -233,152 +235,117 @@ where
                     return Ok(success);
                 }
                 Ok(Err(e)) => {
-                    if !should_retry(&e) {
-                        log::trace!("Operation '{operation_name}' non-retryable error: {e}");
-                        return Err(e);
-                    }
-
-                    if attempt >= self.config.max_retries {
-                        log::trace!(
-                            "Operation '{operation_name}' retries exhausted after {} attempts: {e}",
-                            attempt + 1
-                        );
-                        return Err(e);
-                    }
-
                     let minimum_delay = retry_delay(&e);
-                    let mut delay = backoff.next_duration();
-
-                    if let Some(minimum_delay) = minimum_delay {
-                        delay = delay.max(minimum_delay);
-                    }
-
-                    if let Some(max_elapsed_ms) = self.config.max_elapsed_ms {
-                        let elapsed = start_time.elapsed();
-                        let remaining =
-                            Duration::from_millis(max_elapsed_ms).saturating_sub(elapsed);
-
-                        if remaining.is_zero() {
-                            if minimum_delay.is_some() {
-                                return Err(e);
-                            }
-                            return Err(create_error(format!(
-                                "{}: last error: {e}",
-                                self.budget_exceeded_msg(attempt)
-                            )));
-                        }
-
-                        if minimum_delay.is_some() && delay >= remaining {
-                            return Err(e);
-                        }
-                        delay = delay.min(remaining);
-                    }
-
-                    debug_assert!(
-                        minimum_delay.is_none_or(|minimum_delay| delay >= minimum_delay),
-                        "retry delay must honor the error-provided minimum"
-                    );
-
-                    log::trace!(
-                        "Operation '{operation_name}' attempt {} failed, retrying in {}ms: {e}",
-                        attempt + 1,
-                        delay.as_millis()
-                    );
-
-                    // Yield even on zero-delay to avoid busy-wait loop
-                    if delay.is_zero() {
-                        tokio::task::yield_now().await;
-
-                        if minimum_delay.is_some() {
-                            last_delayed_error = Some(e);
-                        }
-                        attempt += 1;
-                        continue;
-                    }
-
-                    if let Some(token) = cancel {
-                        tokio::select! {
-                            biased;
-                            () = dst::time::sleep(delay) => {},
-                            () = token.cancelled() => {
-                                log::debug!("Operation '{operation_name}' canceled during retry delay (attempt {})", attempt + 1);
-                                return Err(create_error("canceled".to_string()));
-                            }
-                        }
-                    } else {
-                        dst::time::sleep(delay).await;
-                    }
-
-                    if minimum_delay.is_some() {
-                        last_delayed_error = Some(e);
-                    }
-
-                    attempt += 1;
+                    (e, minimum_delay, false)
                 }
-                Err(_) => {
-                    let e = create_error(format!(
+                Err(_) => (
+                    create_error(format!(
                         "Timed out after {}ms",
                         self.config.operation_timeout_ms.unwrap_or(0)
-                    ));
+                    )),
+                    None,
+                    true,
+                ),
+            };
 
-                    if !should_retry(&e) {
-                        log::trace!("Operation '{operation_name}' non-retryable timeout: {e}");
-                        return Err(e);
-                    }
-
-                    if attempt >= self.config.max_retries {
-                        log::trace!(
-                            "Operation '{operation_name}' retries exhausted after timeout ({} attempts): {e}",
-                            attempt + 1
-                        );
-                        return Err(e);
-                    }
-
-                    let mut delay = backoff.next_duration();
-
-                    if let Some(max_elapsed_ms) = self.config.max_elapsed_ms {
-                        let elapsed = start_time.elapsed();
-                        let remaining =
-                            Duration::from_millis(max_elapsed_ms).saturating_sub(elapsed);
-
-                        if remaining.is_zero() {
-                            return Err(create_error(format!(
-                                "{}: last error: {e}",
-                                self.budget_exceeded_msg(attempt)
-                            )));
-                        }
-
-                        delay = delay.min(remaining);
-                    }
-
-                    log::trace!(
-                        "Operation '{operation_name}' attempt {} timed out, retrying in {}ms: {e}",
-                        attempt + 1,
-                        delay.as_millis()
-                    );
-
-                    // Yield even on zero-delay to avoid busy-wait loop
-                    if delay.is_zero() {
-                        tokio::task::yield_now().await;
-                        attempt += 1;
-                        continue;
-                    }
-
-                    if let Some(token) = cancel {
-                        tokio::select! {
-                            biased;
-                            () = dst::time::sleep(delay) => {},
-                            () = token.cancelled() => {
-                                log::debug!("Operation '{operation_name}' canceled during retry delay (attempt {})", attempt + 1);
-                                return Err(create_error("canceled".to_string()));
-                            }
-                        }
-                    } else {
-                        dst::time::sleep(delay).await;
-                    }
-                    attempt += 1;
+            if !should_retry(&e) {
+                if timed_out {
+                    log::trace!("Operation '{operation_name}' non-retryable timeout: {e}");
+                } else {
+                    log::trace!("Operation '{operation_name}' non-retryable error: {e}");
                 }
+                return Err(e);
             }
+
+            if attempt >= self.config.max_retries {
+                if timed_out {
+                    log::trace!(
+                        "Operation '{operation_name}' retries exhausted after timeout ({} attempts): {e}",
+                        attempt + 1
+                    );
+                } else {
+                    log::trace!(
+                        "Operation '{operation_name}' retries exhausted after {} attempts: {e}",
+                        attempt + 1
+                    );
+                }
+                return Err(e);
+            }
+
+            let mut delay = backoff.next_duration();
+
+            if let Some(minimum_delay) = minimum_delay {
+                delay = delay.max(minimum_delay);
+            }
+
+            if let Some(max_elapsed_ms) = self.config.max_elapsed_ms {
+                let elapsed = start_time.elapsed();
+                let remaining = Duration::from_millis(max_elapsed_ms).saturating_sub(elapsed);
+
+                if remaining.is_zero() {
+                    if minimum_delay.is_some() {
+                        return Err(e);
+                    }
+                    return Err(create_error(format!(
+                        "{}: last error: {e}",
+                        self.budget_exceeded_msg(attempt)
+                    )));
+                }
+
+                if minimum_delay.is_some() && delay >= remaining {
+                    return Err(e);
+                }
+                delay = delay.min(remaining);
+            }
+
+            debug_assert!(
+                minimum_delay.is_none_or(|minimum_delay| delay >= minimum_delay),
+                "retry delay must honor the error-provided minimum"
+            );
+
+            if timed_out {
+                log::trace!(
+                    "Operation '{operation_name}' attempt {} timed out, retrying in {}ms: {e}",
+                    attempt + 1,
+                    delay.as_millis()
+                );
+            } else {
+                log::trace!(
+                    "Operation '{operation_name}' attempt {} failed, retrying in {}ms: {e}",
+                    attempt + 1,
+                    delay.as_millis()
+                );
+            }
+
+            // Yield even on zero-delay to avoid busy-wait loop
+            if delay.is_zero() {
+                tokio::task::yield_now().await;
+
+                if minimum_delay.is_some() {
+                    last_delayed_error = Some(e);
+                }
+                attempt += 1;
+                continue;
+            }
+
+            if let Some(token) = cancel {
+                tokio::select! {
+                    biased;
+                    () = dst::time::sleep(delay) => {},
+                    () = token.cancelled() => {
+                        log::debug!("Operation '{operation_name}' canceled during retry delay (attempt {})", attempt + 1);
+                        return Err(create_error("canceled".to_string()));
+                    }
+                }
+            } else {
+                dst::time::sleep(delay).await;
+            }
+
+            if minimum_delay.is_some() {
+                last_delayed_error = Some(e);
+            }
+
+            attempt += 1;
         }
     }
 
@@ -1022,7 +989,7 @@ mod tests {
             &token,
         ));
 
-        assert!(futures::poll!(&mut operation).is_pending());
+        assert!(futures_util::poll!(&mut operation).is_pending());
         advance_clock(Duration::from_millis(100)).await;
         token.cancel();
 
@@ -2301,7 +2268,7 @@ mod proptest_tests {
         #[rstest]
         fn test_budget_clamp_prevents_overshoot(
             max_elapsed_ms in 10u64..30,
-            delay_per_retry in 20u64..50,
+            delay_per_retry in 30u64..50,
         ) {
             let rt = build_paused_runtime();
 
@@ -2318,25 +2285,39 @@ mod proptest_tests {
             };
 
             let manager = RetryManager::new(config);
+            let attempts = Arc::new(AtomicU32::new(0));
+            let attempts_for_operation = Arc::clone(&attempts);
 
-            let _result = rt.block_on(async {
-                let operation_future = manager.execute_with_retry(
+            let (result, elapsed) = rt.block_on(async {
+                let started_at = time::Instant::now();
+                let result = manager.execute_with_retry(
                     "budget_clamp_test",
-                    || async {
-                        // Fast operation to focus on delay timing
-                        Err::<i32, TestError>(TestError::Retryable("fail".to_string()))
+                    move || {
+                        let attempts = Arc::clone(&attempts_for_operation);
+                        async move {
+                            attempts.fetch_add(1, Ordering::SeqCst);
+                            Err::<i32, TestError>(TestError::Retryable("fail".to_string()))
+                        }
                     },
                     |e: &TestError| matches!(e, TestError::Retryable(_)),
                     create_test_error,
-                );
-
-                // Advance time past max_elapsed_ms
-                advance_clock(Duration::from_millis(max_elapsed_ms + delay_per_retry)).await;
-                operation_future.await
+                ).await;
+                (result, started_at.elapsed())
             });
 
-            // With deterministic time, operation completes without wall-clock delay
-            // The budget constraint is still enforced by the retry manager
+            assert!(matches!(
+                result,
+                Err(TestError::Timeout(ref message))
+                    if message == "Retry budget exceeded (2/6)"
+            ));
+            assert_eq!(attempts.load(Ordering::SeqCst), 1);
+            #[cfg(not(all(feature = "simulation", madsim)))]
+            assert_eq!(elapsed, Duration::from_millis(max_elapsed_ms));
+            #[cfg(all(feature = "simulation", madsim))]
+            assert!(
+                elapsed >= Duration::from_millis(max_elapsed_ms)
+                    && elapsed < Duration::from_millis(max_elapsed_ms + 1)
+            );
         }
 
         #[rstest]

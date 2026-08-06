@@ -1,9 +1,9 @@
 # Execution Testing Spec
 
 This section defines a rigorous test matrix for validating adapter execution
-functionality using the `ExecTester` strategy. Both Python
-(`nautilus_trader.test_kit.strategies.tester_exec`) and Rust
-(`nautilus_testkit::testers`) provide the `ExecTester`. Each test case is
+functionality using the Rust `ExecTester` strategy. Python exposes it as a
+built‑in strategy configured through `nautilus_trader.testkit.ExecTesterConfig`;
+Rust code imports it from `nautilus_testkit::testers`. Each test case is
 identified by a prefixed ID (e.g. TC-E01) and grouped by functionality.
 
 **Each adapter must pass the subset of tests matching its supported capabilities.**
@@ -34,14 +34,17 @@ Before running execution tests:
 
 **Python node setup**:
 
-Legacy examples still use `nautilus_trader.live.node.TradingNode`, but new Rust-backed
-PyO3 adapters should prefer `nautilus_trader.live.LiveNode`. Use `LiveNode.builder(...)`
+Legacy examples still use `nautilus_trader.live.node.TradingNode`, but current Rust‑backed
+PyO3 adapters use `nautilus_trader.live.LiveNode`. Use `LiveNode.builder(...)`
 when you need to register adapter client factories before the node is built.
 
 ```python
 from nautilus_trader.common import Environment
-from nautilus_trader.live import LiveExecEngineConfig, LiveNode, LiveRiskEngineConfig
+from nautilus_trader.config import LiveExecEngineConfig
+from nautilus_trader.config import LiveRiskEngineConfig
+from nautilus_trader.live import LiveNode
 from nautilus_trader.model import TraderId
+from nautilus_trader.testkit import ExecTesterConfig
 
 node = (
     LiveNode.builder("TESTER-001", TraderId("TESTER-001"), Environment.SANDBOX)
@@ -51,7 +54,12 @@ node = (
     .build()
 )
 
-node.add_strategy_from_config(importable_strategy_config)
+tester_config = ExecTesterConfig(
+    instrument_id=instrument_id,
+    client_id=client_id,
+    order_qty=order_qty,
+)
+node.add_builtin_strategy("ExecTester", tester_config)
 # Register remaining components, then start or run
 ```
 
@@ -87,7 +95,7 @@ closing the position).
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.001"),
+    order_qty=Quantity.from_str("0.001"),
     open_position_on_start_qty=Decimal("0.001"),
     enable_limit_buys=True,
     enable_limit_sells=True,
@@ -165,7 +173,7 @@ Test market order submission and fills. Market orders should execute immediately
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     open_position_on_start_qty=Decimal("0.01"),
     enable_limit_buys=False,
     enable_limit_sells=False,
@@ -204,7 +212,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     open_position_on_start_qty=Decimal("-0.01"),
     enable_limit_buys=False,
     enable_limit_sells=False,
@@ -243,7 +251,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     open_position_on_start_qty=Decimal("0.01"),
     open_position_time_in_force=TimeInForce.IOC,
     enable_limit_buys=False,
@@ -289,7 +297,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     open_position_on_start_qty=Decimal("0.01"),
     open_position_time_in_force=TimeInForce.FOK,
     enable_limit_buys=False,
@@ -330,7 +338,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("100.0"),  # Quote currency amount
+    order_qty=Quantity.from_str("100.0"),  # Quote currency amount
     open_position_on_start_qty=Decimal("100.0"),
     use_quote_quantity=True,
     enable_limit_buys=False,
@@ -379,7 +387,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     open_position_on_start_qty=Decimal("0.01"),
     close_positions_on_stop=True,
     enable_limit_buys=False,
@@ -445,7 +453,7 @@ Test limit order submission, acceptance, and behavior across time-in-force optio
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=False,
 )
@@ -482,7 +490,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=False,
     enable_limit_sells=True,
 )
@@ -519,7 +527,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=True,
 )
@@ -610,7 +618,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     order_expire_time_delta_mins=60,
     enable_limit_buys=True,
     enable_limit_sells=False,
@@ -709,7 +717,7 @@ orders appear in restart reconciliation, not only in the normal open-order endpo
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=False,
     enable_limit_sells=False,
     enable_stop_buys=True,
@@ -752,7 +760,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=False,
     enable_limit_sells=False,
     enable_stop_buys=False,
@@ -799,7 +807,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=False,
     enable_limit_sells=False,
     enable_stop_buys=True,
@@ -844,7 +852,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=False,
     enable_limit_sells=False,
     enable_stop_buys=False,
@@ -952,7 +960,7 @@ Test order modification (amend) and cancel-replace workflows.
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=False,
     modify_orders_to_maintain_tob_offset=True,
@@ -991,7 +999,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=False,
     enable_limit_sells=True,
     modify_orders_to_maintain_tob_offset=True,
@@ -1035,7 +1043,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=False,
     cancel_replace_orders_to_maintain_tob_offset=True,
@@ -1074,7 +1082,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=False,
     enable_limit_sells=True,
     cancel_replace_orders_to_maintain_tob_offset=True,
@@ -1118,7 +1126,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_stop_buys=True,
     modify_stop_orders_to_maintain_offset=True,
 )
@@ -1161,7 +1169,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_stop_buys=True,
     cancel_replace_stop_orders_to_maintain_offset=True,
 )
@@ -1232,7 +1240,7 @@ Test order cancellation workflows.
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=False,
     cancel_orders_on_stop=True,
@@ -1271,7 +1279,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=True,
     cancel_orders_on_stop=True,
@@ -1310,7 +1318,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=True,
     use_individual_cancels_on_stop=True,
@@ -1349,7 +1357,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=True,
     use_batch_cancel_on_stop=True,
@@ -1418,7 +1426,7 @@ Test bracket order submission (entry + take-profit + stop-loss).
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_brackets=True,
     bracket_entry_order_type=OrderType.LIMIT,
     bracket_offset_ticks=500,
@@ -1509,7 +1517,7 @@ Test order-level flags and special parameters.
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=False,
     use_post_only=True,
@@ -1548,7 +1556,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     open_position_on_start_qty=Decimal("0.01"),
     reduce_only_on_stop=True,
     close_positions_on_stop=True,
@@ -1591,8 +1599,8 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("1.0"),
-    order_display_qty=Decimal("0.1"),
+    order_qty=Quantity.from_str("1.0"),
+    order_display_qty=Quantity.from_str("0.1"),
     enable_limit_buys=True,
     enable_limit_sells=False,
 )
@@ -1700,7 +1708,7 @@ reconciliation pass resolves it.
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     enable_limit_buys=True,
     enable_limit_sells=False,
     use_post_only=True,
@@ -1747,7 +1755,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     open_position_on_start_qty=Decimal("0.01"),
     test_reject_reduce_only=True,
     enable_limit_buys=False,
@@ -1836,7 +1844,7 @@ Test strategy lifecycle behavior and state management on start and stop.
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     open_position_on_start_qty=Decimal("0.01"),
 )
 ```
@@ -1891,7 +1899,7 @@ ExecTesterConfig::builder()
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,
-    order_qty=Decimal("0.01"),
+    order_qty=Quantity.from_str("0.01"),
     can_unsubscribe=True,
 )
 ```
@@ -2015,7 +2023,7 @@ reasonable liquidity for fills.
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,  # CryptoOption instrument
-    order_qty=Decimal("1"),
+    order_qty=Quantity.from_str("1"),
     enable_limit_buys=True,
     enable_limit_sells=False,
     tob_offset_ticks=500,
@@ -2037,7 +2045,7 @@ ExecTesterConfig(
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,  # CryptoOption instrument
-    order_qty=Decimal("1"),
+    order_qty=Quantity.from_str("1"),
     enable_limit_buys=False,
     enable_limit_sells=True,
     tob_offset_ticks=500,
@@ -2066,7 +2074,7 @@ ExecTesterConfig(
 ```python
 ExecTesterConfig(
     instrument_id=instrument_id,  # CryptoOption instrument
-    order_qty=Decimal("1"),
+    order_qty=Quantity.from_str("1"),
     enable_limit_buys=True,
     enable_limit_sells=False,
     order_params={"px_usd": "100.5"},  # Adapter-specific pricing key
@@ -2156,56 +2164,70 @@ ExecTesterConfig(
 
 ## ExecTester configuration reference
 
-Quick reference for all `ExecTesterConfig` parameters. Defaults shown are for the Python config;
-the Rust builder uses equivalent defaults.
+Quick reference for every Python `ExecTesterConfig` parameter. Defaults are resolved values after
+construction; the Rust builder uses equivalent defaults.
 
-| Parameter                                       | Type         | Default     | Affects groups |
-| ----------------------------------------------- | ------------ | ----------- | -------------- |
-| `instrument_id`                                 | InstrumentId | *required*  | All            |
-| `order_qty`                                     | Decimal      | *required*  | All            |
-| `order_display_qty`                             | Decimal?     | None        | 2, 7           |
-| `order_expire_time_delta_mins`                  | PositiveInt? | None        | 2              |
-| `order_params`                                  | dict?        | None        | 7, 10          |
-| `client_id`                                     | ClientId?    | None        | All            |
-| `subscribe_quotes`                              | bool         | True        |                |
-| `subscribe_trades`                              | bool         | True        |                |
-| `subscribe_book`                                | bool         | False       |                |
-| `book_type`                                     | BookType     | L2_MBP      |                |
-| `book_depth`                                    | PositiveInt? | None        |                |
-| `book_interval_ms`                              | PositiveInt  | 1000        |                |
-| `book_levels_to_print`                          | PositiveInt  | 10          |                |
-| `open_position_on_start_qty`                    | Decimal?     | None        | 1, 9           |
-| `open_position_time_in_force`                   | TimeInForce  | GTC         | 1              |
-| `enable_limit_buys`                             | bool         | True        | 2, 4, 5, 6     |
-| `enable_limit_sells`                            | bool         | True        | 2, 4, 5, 6     |
-| `enable_stop_buys`                              | bool         | False       | 3, 4           |
-| `enable_stop_sells`                             | bool         | False       | 3, 4           |
-| `limit_time_in_force`                           | TimeInForce? | None        | 2, 6           |
-| `tob_offset_ticks`                              | PositiveInt  | 500         | 2, 4           |
-| `stop_order_type`                               | OrderType    | STOP_MARKET | 3              |
-| `stop_offset_ticks`                             | PositiveInt  | 100         | 3              |
-| `stop_limit_offset_ticks`                       | PositiveInt? | None        | 3              |
-| `stop_time_in_force`                            | TimeInForce? | None        | 3              |
-| `stop_trigger_type`                             | TriggerType? | None        | 3              |
-| `enable_brackets`                               | bool         | False       | 6              |
-| `bracket_entry_order_type`                      | OrderType    | LIMIT       | 6              |
-| `bracket_offset_ticks`                          | PositiveInt  | 500         | 6              |
-| `modify_orders_to_maintain_tob_offset`          | bool         | False       | 4              |
-| `modify_stop_orders_to_maintain_offset`         | bool         | False       | 4              |
-| `cancel_replace_orders_to_maintain_tob_offset`  | bool         | False       | 4              |
-| `cancel_replace_stop_orders_to_maintain_offset` | bool         | False       | 4              |
-| `use_post_only`                                 | bool         | False       | 2, 6, 7, 8     |
-| `use_quote_quantity`                            | bool         | False       | 1, 7           |
-| `emulation_trigger`                             | TriggerType? | None        | 2, 3           |
-| `cancel_orders_on_stop`                         | bool         | True        | 5, 9           |
-| `close_positions_on_stop`                       | bool         | True        | 9              |
-| `close_positions_qty_precision`                 | int?         | None        | 9              |
-| `close_positions_time_in_force`                 | TimeInForce? | None        | 9              |
-| `reduce_only_on_stop`                           | bool         | True        | 7, 9           |
-| `use_individual_cancels_on_stop`                | bool         | False       | 5              |
-| `use_batch_cancel_on_stop`                      | bool         | False       | 5              |
-| `dry_run`                                       | bool         | False       |                |
-| `log_data`                                      | bool         | True        |                |
-| `test_reject_post_only`                         | bool         | False       | 8              |
-| `test_reject_reduce_only`                       | bool         | False       | 8              |
-| `can_unsubscribe`                               | bool         | True        | 9              |
+| Parameter                                       | Type                  | Default                | Affects groups |
+| ----------------------------------------------- | --------------------- | ---------------------- | -------------- |
+| `strategy_id`                                   | `StrategyId?`         | `None`                 | All            |
+| `order_id_tag`                                  | `str?`                | `None`                 | All            |
+| `use_hyphens_in_client_order_ids`               | `bool`                | `True`                 | All            |
+| `use_uuid_client_order_ids`                     | `bool`                | `False`                | All            |
+| `external_order_claims`                         | `list[InstrumentId]?` | `None`                 | 9              |
+| `instrument_id`                                 | `InstrumentId`        | `BTCUSDT-PERP.BINANCE` | All            |
+| `client_id`                                     | `ClientId?`           | `None`                 | All            |
+| `order_qty`                                     | `Quantity`            | `0.001`                | All            |
+| `order_display_qty`                             | `Quantity?`           | `None`                 | 2, 7           |
+| `order_expire_time_delta_mins`                  | `PositiveInt?`        | `None`                 | 2              |
+| `order_params`                                  | `dict?`               | `None`                 | 7, 10          |
+| `subscribe_book`                                | `bool`                | `False`                |                |
+| `subscribe_quotes`                              | `bool`                | `True`                 |                |
+| `subscribe_trades`                              | `bool`                | `True`                 |                |
+| `book_type`                                     | `BookType`            | `L2_MBP`               |                |
+| `book_depth`                                    | `PositiveInt?`        | `None`                 |                |
+| `book_interval_ms`                              | `PositiveInt`         | `1000`                 |                |
+| `book_levels_to_print`                          | `PositiveInt`         | `10`                   |                |
+| `open_position_on_start_qty`                    | `Decimal?`            | `None`                 | 1, 9           |
+| `open_position_on_first_quote`                  | `bool`                | `False`                | 1              |
+| `open_position_time_in_force`                   | `TimeInForce`         | `GTC`                  | 1              |
+| `enable_limit_buys`                             | `bool`                | `True`                 | 2, 4, 5, 6     |
+| `enable_limit_sells`                            | `bool`                | `True`                 | 2, 4, 5, 6     |
+| `enable_stop_buys`                              | `bool`                | `False`                | 3, 4           |
+| `enable_stop_sells`                             | `bool`                | `False`                | 3, 4           |
+| `tob_offset_ticks`                              | `PositiveInt`         | `500`                  | 2, 4           |
+| `limit_time_in_force`                           | `TimeInForce?`        | `None`                 | 2, 6           |
+| `stop_order_type`                               | `OrderType`           | `STOP_MARKET`          | 3              |
+| `stop_offset_ticks`                             | `PositiveInt`         | `100`                  | 3              |
+| `stop_limit_offset_ticks`                       | `PositiveInt?`        | `None`                 | 3              |
+| `stop_trigger_type`                             | `TriggerType`         | `DEFAULT`              | 3              |
+| `stop_time_in_force`                            | `TimeInForce?`        | `None`                 | 3              |
+| `trailing_offset`                               | `Decimal?`            | `None`                 | 3              |
+| `trailing_offset_type`                          | `TrailingOffsetType`  | `BASIS_POINTS`         | 3              |
+| `enable_brackets`                               | `bool`                | `False`                | 6              |
+| `batch_submit_limit_pair`                       | `bool`                | `False`                | 2, 5           |
+| `bracket_entry_order_type`                      | `OrderType`           | `LIMIT`                | 6              |
+| `bracket_offset_ticks`                          | `PositiveInt`         | `500`                  | 6              |
+| `modify_orders_to_maintain_tob_offset`          | `bool`                | `False`                | 4              |
+| `modify_stop_orders_to_maintain_offset`         | `bool`                | `False`                | 4              |
+| `cancel_replace_orders_to_maintain_tob_offset`  | `bool`                | `False`                | 4              |
+| `cancel_replace_stop_orders_to_maintain_offset` | `bool`                | `False`                | 4              |
+| `use_post_only`                                 | `bool`                | `False`                | 2, 6, 7, 8     |
+| `limit_aggressive`                              | `bool`                | `False`                | 2              |
+| `use_quote_quantity`                            | `bool`                | `False`                | 1, 7           |
+| `emulation_trigger`                             | `TriggerType?`        | `None`                 | 2, 3           |
+| `use_individual_cancels_on_stop`                | `bool`                | `False`                | 5              |
+| `cancel_orders_on_stop`                         | `bool`                | `True`                 | 5, 9           |
+| `close_positions_on_stop`                       | `bool`                | `True`                 | 9              |
+| `close_positions_qty_precision`                 | `int?`                | `None`                 | 9              |
+| `close_positions_time_in_force`                 | `TimeInForce?`        | `None`                 | 9              |
+| `reduce_only_on_stop`                           | `bool`                | `True`                 | 7, 9           |
+| `use_batch_cancel_on_stop`                      | `bool`                | `False`                | 5              |
+| `dry_run`                                       | `bool`                | `False`                |                |
+| `log_data`                                      | `bool`                | `True`                 |                |
+| `test_reject_post_only`                         | `bool`                | `False`                | 8              |
+| `test_reject_reduce_only`                       | `bool`                | `False`                | 8              |
+| `test_modify_rejected`                          | `bool`                | `False`                | 4              |
+| `can_unsubscribe`                               | `bool`                | `True`                 | 9              |
+| `clamp_to_instrument_price_range`               | `bool`                | `False`                | 1-8, 10        |
+| `log_events`                                    | `bool`                | `True`                 | All            |
+| `log_commands`                                  | `bool`                | `True`                 | All            |

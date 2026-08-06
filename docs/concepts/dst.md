@@ -1,4 +1,6 @@
-# Deterministic Simulation Testing (DST)
+# DST
+
+<!-- Keep this title as "DST"; longer titles do not render well in the left navigation. -->
 
 Deterministic simulation testing (DST) runs NautilusTrader under a seed-controlled runtime so that
 timing-sensitive execution behavior is bitwise reproducible from a single integer. This page is the
@@ -141,9 +143,10 @@ The hook lives at `.pre-commit-hooks/check_dst_conventions.sh` and runs both in 
 pre‑commit suite and in CI. Rules 1 to 6 apply to the 17 in‑scope workspace crates; Rule 7 applies
 to the nine crates on the madsim build path. The hook fails the commit when a rule detects:
 
-- **Rule 1**: raw `std::time::Instant::now()`, `SystemTime::now()`, or `chrono::Utc::now()` reads,
+- **Rule 1**: raw `std::time::Instant::now()`, `SystemTime::now()`, `jiff::Timestamp::now()`, or
+  `jiff::Zoned::now()` reads,
   including bare forms when the enclosing file imports the type from `std::time`, or from
-  `chrono` for `Utc`.
+  `jiff` for `Timestamp` or `Zoned`.
 - **Rule 2**: raw RNG usage (`rand::thread_rng`, `rand::rng()`, `fastrand::`, `getrandom::`,
   `OsRng`) or `Uuid::new_v4()` without cfg gating.
 - **Rule 3**: `tokio::select!` blocks missing `biased;` within the first three lines.
@@ -293,8 +296,8 @@ marker with a reason:
 - `crates/model/src/defi/reporting.rs`: progress logging (file-allowlisted).
 - `crates/core/src/time.rs`: seam definition site (file-allowlisted).
 
-`chrono::Utc::now` is hook-banned in the in-scope crates. The remaining call sites are the logging
-bridge and writer, scoped out under
+`jiff::Timestamp::now` and `jiff::Zoned::now` are hook-banned in the in-scope crates. The remaining
+timestamp call sites are the logging bridge and writer, scoped out under
 [Logging runs on real OS threads](#logging-runs-on-real-os-threads).
 `crates/core/src/datetime.rs::is_within_last_24_hours` routes through
 `nautilus_core::time::nanos_since_unix_epoch()` and compares in `u64` nanos directly.
@@ -371,13 +374,14 @@ runs under simulation and pins the gated behavior.
 
 The contract is deliberately narrow. The following weakenings are explicit, not oversights.
 
-### Python is not in DST scope
+### Python and FFI are not in DST scope
 
 DST runs under a native Rust test harness. No Python interpreter starts during a DST run. The
-PyO3 bindings under `crates/*/src/python/`, the `ffi/` directories, and the Python packages
-under `nautilus_trader/` are excluded from the contract as a policy, not as a weakness. Any
-code reachable only from Python call paths is out of scope; any Rust path reachable from the
-native DST harness must satisfy the contract even if the same type is also exported to Python.
+PyO3 bindings under `crates/*/src/python/`, the Rust FFI modules under `crates/core/src/ffi/` and
+`crates/model/src/ffi/`, and the Python package under `python/nautilus_trader/` are excluded from
+the contract. Code reachable only through these bindings is out of scope; any Rust path reachable
+from the native DST harness must satisfy the contract, even if the same type is also exported
+through a binding.
 
 The `check-dst-conventions` hook encodes this policy by skipping `/python/` and `/ffi/` paths
 in the in-scope crates. Clock, RNG, and threading call sites behind those paths do not apply
@@ -440,7 +444,8 @@ simulation state.
 ### Adapters
 
 Adapter crates are out of scope. They carry their own direct clock, RNG, and transport-layer
-call sites (`chrono::Utc::now`, `SystemTime::now`, raw transport clients), varying by adapter.
+call sites (`jiff::Timestamp::now`, `jiff::Zoned::now`, `SystemTime::now`, raw transport clients),
+varying by adapter.
 An adapter that enters the DST path must be audited for those call sites before the contract
 covers its behavior.
 

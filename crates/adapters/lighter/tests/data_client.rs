@@ -48,8 +48,8 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use chrono::{TimeZone, Utc};
 use futures_util::{SinkExt, StreamExt};
+use jiff::Timestamp;
 use nautilus_common::{
     clients::DataClient,
     live::runner::replace_data_event_sender,
@@ -74,7 +74,7 @@ use nautilus_lighter::{
     http::{client::LIGHTER_FUNDINGS_MAX_LIMIT, query::LighterFundingsQuery},
 };
 use nautilus_model::{
-    data::{BarSpecification, BarType, Data, OrderBookDeltas_API},
+    data::{BarSpecification, BarType, Data, OrderBookDeltas},
     enums::{AggregationSource, BarAggregation, BookAction, BookType, PriceType, RecordFlag},
     identifiers::{ClientId, InstrumentId},
     instruments::Instrument,
@@ -471,7 +471,7 @@ async fn collect_managed_book_batches(
     client: &mut LighterDataClient,
     rx: &mut tokio::sync::mpsc::UnboundedReceiver<DataEvent>,
     state: &TestServerState,
-) -> (OrderBookDeltas_API, OrderBookDeltas_API) {
+) -> (OrderBookDeltas, OrderBookDeltas) {
     state
         .enqueue_push(load_json("ws_order_book_subscribed.json"))
         .await;
@@ -525,7 +525,7 @@ async fn collect_managed_book_batches(
         unreachable!("event predicate requires deltas")
     };
 
-    (snapshot, incremental)
+    (*snapshot, *incremental)
 }
 
 #[rstest]
@@ -1798,14 +1798,8 @@ async fn test_request_bars_emits_response() {
         BarSpecification::new(1, BarAggregation::Minute, PriceType::Last),
         AggregationSource::External,
     );
-    let start = Utc
-        .timestamp_millis_opt(1_700_000_000_000)
-        .single()
-        .unwrap();
-    let end = Utc
-        .timestamp_millis_opt(1_700_000_120_000)
-        .single()
-        .unwrap();
+    let start = Timestamp::from_millisecond(1_700_000_000_000).unwrap();
+    let end = Timestamp::from_millisecond(1_700_000_120_000).unwrap();
 
     client
         .request_bars(RequestBars::new(
@@ -1843,14 +1837,8 @@ async fn test_request_funding_rates_emits_response() {
     client.connect().await.expect("connect");
     drain_pending(&mut rx);
 
-    let start = Utc
-        .timestamp_millis_opt(1_778_702_400_000)
-        .single()
-        .unwrap();
-    let end = Utc
-        .timestamp_millis_opt(1_778_706_000_000)
-        .single()
-        .unwrap();
+    let start = Timestamp::from_millisecond(1_778_702_400_000).unwrap();
+    let end = Timestamp::from_millisecond(1_778_706_000_000).unwrap();
 
     client
         .request_funding_rates(RequestFundingRates::new(
@@ -1891,11 +1879,11 @@ async fn test_request_funding_rates_does_not_emit_partial_response_at_page_cap()
     drain_pending(&mut rx);
     state.funding_cap.store(true, Ordering::SeqCst);
 
-    let start = Utc.timestamp_millis_opt(0).single().unwrap();
+    let start = Timestamp::from_millisecond(0).unwrap();
     let interval_ms = LighterFundingResolution::OneHour.interval_millis();
     let page_span_ms = i64::from(LIGHTER_FUNDINGS_MAX_LIMIT - 1) * interval_ms;
     let end_ms = i64::try_from(HISTORY_REQUEST_PAGE_CAP + 1).unwrap() * page_span_ms;
-    let end = Utc.timestamp_millis_opt(end_ms).single().unwrap();
+    let end = Timestamp::from_millisecond(end_ms).unwrap();
 
     client
         .request_funding_rates(RequestFundingRates::new(

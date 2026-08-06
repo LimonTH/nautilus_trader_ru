@@ -205,7 +205,7 @@ pub(crate) struct PendingOrderInfo {
 #[derive(Clone)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.okx", from_py_object)
+    pyo3::pyclass(module = "nautilus_trader.adapters.okx", from_py_object)
 )]
 #[cfg_attr(
     feature = "python",
@@ -630,7 +630,6 @@ impl OKXWebSocketClient {
             config,
             Some(message_handler),
             Some(ping_handler),
-            None, // post_reconnection
             keyed_quotas,
             Some(*OKX_WS_CONNECTION_QUOTA), // Default quota for connection operations
         )

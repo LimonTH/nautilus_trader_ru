@@ -27,7 +27,7 @@ use ahash::AHashSet;
 use bytes::Bytes;
 use indexmap::IndexMap;
 use log::LevelFilter;
-use nautilus_core::{Params, UnixNanos};
+use nautilus_core::{Params, UUID4, UnixNanos};
 use nautilus_model::{
     accounts::AccountAny,
     data::{
@@ -315,6 +315,12 @@ impl DataActor for TestDataActor {
     }
 
     fn on_historical_data(&mut self, data: &dyn Any) -> anyhow::Result<()> {
+        if let Some(custom_data) = data.downcast_ref::<CustomData>() {
+            self.received_custom_data.push(custom_data.clone());
+        } else if let Some(custom_data) = data.downcast_ref::<Vec<CustomData>>() {
+            self.received_custom_data.extend_from_slice(custom_data);
+        }
+
         self.received_data.push(format!("{data:?}"));
         Ok(())
     }
@@ -2385,8 +2391,8 @@ fn test_request_quotes_rejects_invalid_time_range(
     let now_ns = UnixNanos::from(1_700_000_000_123_456_789);
     clock.borrow_mut().set_time(now_ns);
     let now = clock.borrow().utc_now();
-    let start = start_offset_secs.map(|offset| now + chrono::Duration::seconds(offset));
-    let end = end_offset_secs.map(|offset| now + chrono::Duration::seconds(offset));
+    let start = start_offset_secs.map(|offset| now + jiff::SignedDuration::from_secs(offset));
+    let end = end_offset_secs.map(|offset| now + jiff::SignedDuration::from_secs(offset));
     let actor_id = register_data_actor(clock, cache, trader_id);
     let mut actor = get_actor_unchecked::<TestDataActor>(&actor_id);
     actor.start().unwrap();
@@ -3281,6 +3287,79 @@ fn test_request_data(
     // Actor should receive the custom data
     assert_eq!(actor.received_data.len(), 1);
     assert_eq!(actor.received_data[0], "Any { .. }");
+}
+
+#[rstest]
+fn test_handle_data_response_preserves_custom_data_payload_shape(
+    clock: Rc<RefCell<TestClock>>,
+    cache: Rc<RefCell<Cache>>,
+    trader_id: TraderId,
+) {
+    test_logging();
+
+    let actor_id = register_data_actor(clock, cache, trader_id);
+    let mut actor = get_actor_unchecked::<TestDataActor>(&actor_id);
+
+    let data = vec![
+        make_test_custom_data("CustomData-01"),
+        make_test_custom_data("CustomData-02"),
+    ];
+    let scalar = make_test_custom_data("CustomData-scalar");
+    let data_type = data[0].data_type.clone();
+    let scalar_response = CustomDataResponse::new(
+        UUID4::new(),
+        ClientId::new("TestClient"),
+        None,
+        scalar.data_type.clone(),
+        scalar.clone(),
+        None,
+        None,
+        UnixNanos::default(),
+        None,
+    );
+
+    actor.handle_data_response(&scalar_response);
+
+    assert_eq!(actor.received_data.len(), 1);
+    assert_eq!(actor.received_custom_data, vec![scalar.clone()]);
+
+    let empty_response = CustomDataResponse::new(
+        UUID4::new(),
+        ClientId::new("TestClient"),
+        None,
+        data_type.clone(),
+        Vec::<CustomData>::new(),
+        None,
+        None,
+        UnixNanos::default(),
+        None,
+    );
+
+    actor.handle_data_response(&empty_response);
+
+    assert_eq!(actor.received_data.len(), 2);
+    assert_eq!(actor.received_custom_data, vec![scalar.clone()]);
+
+    let client_id = ClientId::new("TestClient");
+    let response = CustomDataResponse::new(
+        UUID4::new(),
+        client_id,
+        None,
+        data_type,
+        data.clone(),
+        None,
+        None,
+        UnixNanos::default(),
+        None,
+    );
+
+    actor.handle_data_response(&response);
+
+    let mut expected = vec![scalar];
+    expected.extend(data);
+
+    assert_eq!(actor.received_data.len(), 3);
+    assert_eq!(actor.received_custom_data, expected);
 }
 
 #[cfg(feature = "defi")]

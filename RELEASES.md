@@ -1,3 +1,84 @@
+# NautilusTrader 2.0.0rc3
+
+Released on TBD (UTC).
+
+### Enhancements
+
+- Added canonical Rust backtest results with normalized projections, content digests, and stable ordering
+- Added full Rust config parity for the Python testkit `ExecTesterConfig`
+- Added Python v2 Redis message bus backing for `LiveNode` (#4630), thanks for reporting @davidgreyme
+- Added `LiveNode.start()` warning when external message bus ingress requires `run()`
+- Added runtime external‑order claim registration and removal to Rust `LiveNode` (#4620), thanks @folknor
+- Added `INFO` logs for socket and WebSocket connection loss and recovery (#4621), thanks @folknor
+- Added Deribit book summaries as requestable custom data (#4576), thanks @graceyangfan
+- Added Polymarket `compute_effective_deltas` config option to emit net changes for book snapshots (default `False`)
+
+### Breaking Changes
+
+- Removed legacy v1 Cython package and root build path; use the Rust + PyO3 package
+- Removed `nautilus_trader.core.is_pycapsule`; use normal Python type checks on model objects
+- Removed model `as_pycapsule` methods and `OrderBookDeltas.from_pycapsule`; pass typed model objects directly
+- Removed FFI features and static libraries outside `nautilus-core` and `nautilus-model`; use Rust or PyO3 APIs
+- Removed `cython-compat`, Cython cbindgen configs, and `drop_cvec_pycapsule`; use PyO3 APIs
+- Removed Databento `load_*_as_pycapsule` methods; use the corresponding `load_*` methods
+- Removed generic Python clients and support APIs from `nautilus_trader.network`; use adapter APIs or `nautilus-network`
+- Removed unused Rust `SocketClient` connection/disconnection callbacks and `WebSocketClient` reconnection callback; use message or epoch handlers
+- Replaced Rust `nautilus_model::python::data::data_to_pycapsule` with `data_to_pyobject`
+- Changed `DataQueryResult` iteration to return Python object lists instead of `DataFFI` capsules
+- Changed adapter callbacks to receive typed model objects instead of `PyCapsule` objects
+- Changed Interactive Brokers historical tick responses and Tardis batch streams to provide typed model objects
+
+### Security
+
+- Pinned the direct `alloy` crate dependency to v2.2.0 to limit its larger supply‑chain risk surface
+- Fixed malformed external message topics aborting Python v2 `LiveNode` (#4630), thanks for reporting @davidgreyme
+- Fixed macOS ARM64 PyArrow SIGSEGVs (#4633, #4642), thanks for reporting @ZhongxuanWang; thanks @alex09x
+- Fixed fee model panics from invalid Python inputs and decimal overflow (#4640), thanks @dfjmax
+- Fixed Rust network and WebSocket adapter logs that could expose credentials and payload contents
+- Removed `OrderBookDeltas.from_pycapsule`, which reinterpreted unvalidated capsule pointers and could cause invalid memory access
+
+### Fixes
+
+- Fixed Python `on_historical_data` to receive `CustomData` response batches as a single list
+- Fixed `Cache::get_xrate` for instrument symbols that do not use the `BASE/QUOTE` format
+- Fixed market order risk checks to use cached bars and deny orders without a usable price
+- Fixed `Position` average open price (`avg_px_open`) for exact closes after partial fills
+- Fixed order list `OrderInitialized` events to carry `order_list_id` through publication, persistence, and replay
+- Fixed failed live strategy registrations leaving orphaned external‑order claims (#4620), thanks @folknor
+- Fixed Python v2 `FeeModel` subclass constructors and concrete model inheritance (#4640), thanks @dfjmax
+- Fixed Binance Spot HTTP submissions to use private‑stream order events across reconnects
+- Fixed Bybit REST and WebSocket order `smpGroup` string decoding (#4655), thanks for reporting @a-green-hand-jack
+- Fixed Derive cancel‑only replacements and reused labels during order reconciliation
+- Fixed Polymarket maker fill ownership and reported mass‑status trade drops (#4662), thanks @seungpyoson
+- Fixed Polymarket WebSocket asset and discovery subscription replay across reconnects
+
+### Internal Improvements
+
+- Hardened development wheel publishing to validate exact artifacts and fail closed
+- Improved native backtest workload coverage for canonical result checks
+- Improved Coinbase request tests by removing redundant waits (#4637), thanks @pengpengyi92
+- Improved network crate tests for retries, rate limits, mutual TLS, HTTP, socket reconnects, and WebSocket messages
+- Refined CI, build, and dependency configuration after the v1 removal
+- Replaced Chrono and Chrono-TZ with Jiff and bundled TZDB data (#4639), thanks @sunlei
+- Upgraded Rust development tools: `cargo-hawk` v0.1.12, `cargo-nextest` v0.9.143, and Miri `nightly-2026-08-01`
+- Upgraded Python and workflow tools: `uv` v0.12.1, `pypi-attestations` v0.0.30, and `zizmor` v1.29.0
+- Upgraded `base64` crate to v0.23.1 with only its safe `std` feature enabled
+- Upgraded `capnp` and `capnpc` crates to v0.27.0 and regenerated schema bindings
+- Upgraded `clap` to v4.6.5, `http` to v1.5.0, `time` to v0.3.55, and `toml` to v1.1.4
+- Upgraded `pem` crate to v4.0.0 to align with the current Base64 API
+- Upgraded `pyo3` crate to v0.29.1 for object‑lifetime, free‑threading, and compatibility fixes
+- Upgraded `redis` crate to v1.5.0
+
+### Documentation Updates
+
+- Consolidated Python v2 integration guides and examples on canonical paths
+- Corrected the Rust `DataTester` book depth support note in the data testing spec
+- Documented external Redis message fields and Python custom-data registration
+- Documented the transient startup position-check race in the Lighter integration guide
+- Fixed broken README links on PyPI (#4644, #4648), thanks for reporting @ZhongxuanWang; thanks @xxxjqm
+
+---
+
 # NautilusTrader 1.231.0 Beta
 
 Released on 2nd August 2026 (UTC).
@@ -56,7 +137,8 @@ adapter set. The following limits remain deferred:
 - External message-bus publication of serialized order and position snapshots.
 - V1 `StreamingConfig` and `DataCatalogConfig` iterator wiring on the v2 `BacktestNode`.
 - V1 adapter instrument-provider filters; Hyperliquid v2 loads the configured universe.
-- Published tutorials still use v1; generated v2 stubs and `python/examples/` show the current API.
+- Published tutorials still use v1; generated v2 stubs and the
+  [Rust‑native adapter examples](examples/README.md#live-adapter-examples) show the current API.
 - Static typing does not cover three Kraken batch methods or adapter wire DTO runtime attributes.
 
 ### Enhancements

@@ -1,9 +1,7 @@
 # Migrate from v1 to v2
 
-NautilusTrader v2 is the Rust core and PyO3 Python package under `python/`. It becomes the primary
-Python path when `develop` switches to that package. Until that cutover, the main distribution and
-general documentation still describe the legacy v1 Cython package. Use this guide to prepare a
-migration.
+NautilusTrader v2 is the Rust core and PyO3 Python package under `python/`. It is the primary Python
+path on `develop`. Use this guide to migrate from the legacy v1 Cython package.
 
 After cutover, v1 moves to the `develop_v1` branch for approximately three months of critical
 security backports. It does not receive new feature or parity work.
@@ -24,15 +22,14 @@ uv pip install --pre nautilus_trader
 Run this block outside a NautilusTrader source checkout. The repository's `exclude-newer` uv policy
 can filter out newly published release-candidate wheels.
 
-To build from source, build the package in its dedicated `python/.venv`:
+To build from source, build the package from the repository root:
 
 ```bash
-make build-debug-v2
-cd python
+make build-debug
 .venv/bin/python -c 'import nautilus_trader; print(nautilus_trader.__version__)'
 ```
 
-The root `.venv` and root `pyproject.toml` belong to the legacy v1 build during the transition.
+The source build uses the root `.venv` and `target/` directories.
 See [Installation](docs/getting_started/installation.md) for platform support and package-index options.
 
 ## Port Python code
@@ -45,7 +42,7 @@ imports and configuration to the new module paths:
 | `nautilus_trader.backtest.engine.BacktestEngine`               | `nautilus_trader.backtest.BacktestEngine`                 |
 | `nautilus_trader.backtest.node.BacktestNode`                   | `nautilus_trader.backtest.BacktestNode`                   |
 | `nautilus_trader.live.node.TradingNode`                        | `nautilus_trader.live.LiveNode`                           |
-| `nautilus_trader.config.StrategyConfig`                        | `nautilus_trader.trading.StrategyConfig`                  |
+| `nautilus_trader.config.StrategyConfig`                        | `nautilus_trader.config.StrategyConfig`                   |
 | Adapter classes from `nautilus_trader.adapters.<venue>.config` | Rust/PyO3 classes from `nautilus_trader.adapters.<venue>` |
 
 ### Common API renames
@@ -130,20 +127,22 @@ standalone factory has no equivalent flag readback.
 
 Historical requests use type-specific batch callbacks in v2:
 
-| v1 data through `on_historical_data` | v2 callback                   | v2 argument                   |
-| ------------------------------------ | ----------------------------- | ----------------------------- |
-| Custom data                          | `on_historical_data`          | One `CustomData`              |
-| Book snapshot                        | `on_book`                     | One `OrderBook`               |
-| Book deltas                          | `on_historical_book_deltas`   | `Sequence[OrderBookDelta]`    |
-| Book depth                           | `on_historical_book_depth`    | `Sequence[OrderBookDepth10]`  |
-| Quote ticks                          | `on_historical_quotes`        | `Sequence[QuoteTick]`         |
-| Trade ticks                          | `on_historical_trades`        | `Sequence[TradeTick]`         |
-| Funding rates                        | `on_historical_funding_rates` | `Sequence[FundingRateUpdate]` |
-| Bars                                 | `on_historical_bars`          | `Sequence[Bar]`               |
+| v1 data through `on_historical_data` | v2 callback                   | v2 argument                                |
+| ------------------------------------ | ----------------------------- | ------------------------------------------ |
+| Custom data                          | `on_historical_data`          | One `CustomData` or `Sequence[CustomData]` |
+| Book snapshot                        | `on_book`                     | One `OrderBook`                            |
+| Book deltas                          | `on_historical_book_deltas`   | `Sequence[OrderBookDelta]`                 |
+| Book depth                           | `on_historical_book_depth`    | `Sequence[OrderBookDepth10]`               |
+| Quote ticks                          | `on_historical_quotes`        | `Sequence[QuoteTick]`                      |
+| Trade ticks                          | `on_historical_trades`        | `Sequence[TradeTick]`                      |
+| Funding rates                        | `on_historical_funding_rates` | `Sequence[FundingRateUpdate]`              |
+| Bars                                 | `on_historical_bars`          | `Sequence[Bar]`                            |
 
 Typed historical results no longer fall through to `on_historical_data`; that hook handles custom
-data. `on_historical_mark_prices` and `on_historical_index_prices` are available for native batch
-delivery, but the current public Python API does not initiate those requests.
+data. A response carrying one `CustomData` arrives as that object; a response carrying a batch
+arrives as one list, including an empty list. `on_historical_mark_prices` and
+`on_historical_index_prices` are available for native batch delivery, but the current public Python
+API does not initiate those requests.
 
 The generic `on_event` hook is removed. Replace timer handling with `on_time_event`, aggregate order
 handling with `on_order_event`, and aggregate position handling with `on_position_event`. For
@@ -185,7 +184,6 @@ Several v1 inspection names have direct v2 replacements:
 | `AdaptiveMovingAverage.period_alpha_slow`            | `.period_slow`                        |
 | `LinearRegression.R2`                                | `LinearRegression.r2`                 |
 | `DirectionalMovement.value`                          | `.pos` and `.neg`                     |
-| `CustomData.data`                                    | `CustomData.value`                    |
 | `DataType.type`                                      | `DataType.type_name`                  |
 | `OrderBookDelta.is_add/is_clear/is_delete/is_update` | inspect `OrderBookDelta.action`       |
 | `OrderBookDeltas.is_snapshot`                        | inspect `OrderBookDeltas.flags`       |
@@ -196,6 +194,10 @@ Several v1 inspection names have direct v2 replacements:
 used by the application when calendar-time inspection is needed. V1 `DirectionalMovement.value`
 never changed from zero, so v2 exposes the meaningful positive and negative outputs instead.
 
+The payload on `nautilus_trader.model.CustomData` remains available through `.data`. The separate
+`nautilus_trader.common.CustomData` byte container exposes `.value`; it is not the type accepted by
+`DataActor.publish_data()`.
+
 ### Config readback and sensitive values
 
 V2 immutable configs expose non-secret constructor values as read-only properties. This includes
@@ -203,20 +205,16 @@ engine, backtest venue and run, live reconciliation, and data/execution tester s
 `LiveRiskEngineConfig.max_notional_per_order` returns v2's validated strings even when constructed
 from Python integers or decimal values.
 
-Potential credentials and consumed callbacks use bounded inspection properties instead of raw
-readback:
+Potential credentials use bounded inspection properties instead of raw readback:
 
 | Constructor field                                    | Inspection property                   |
 | ---------------------------------------------------- | ------------------------------------- |
 | `BacktestDataConfig.catalog_fs_storage_options`      | `catalog_fs_storage_option_keys`      |
 | `BacktestDataConfig.catalog_fs_rust_storage_options` | `catalog_fs_rust_storage_option_keys` |
-| `SocketConfig.handler`                               | `has_handler`                         |
-| `WebSocketConfig.headers`                            | `header_names`                        |
-| `WebSocketConfig.proxy_url`                          | `has_proxy_url`                       |
 
 These raw fields and adapter credentials remain private. Some configs provide `has_*` checks for
 credential-bearing proxy, database, or gateway settings without returning their values. Keep
-secrets and callbacks in application-owned state if they must be reused.
+secrets in application-owned state if they must be reused.
 
 Betfair configuration moves and flattens in v2:
 
@@ -238,8 +236,8 @@ Databento configuration also changes shape:
 - The v1 startup preload fields `instrument_ids` and `parent_symbols` are removed. V2 handles live
   subscriptions and historical instrument requests directly instead of configuring an instrument provider preload.
 - `http_gateway`, `live_gateway`, `timeout_initial_load`, `mbo_subscriptions_delay`, and
-  `reconnect_timeout_mins` are not accepted by the v2 live-node config. Reconnection remains an
-  internal client concern; do not copy those v1 fields into v2 config construction.
+  `reconnect_timeout_mins` are not accepted by `DatabentoLiveClientConfig`. Reconnection remains
+  an internal client concern; do not copy those v1 fields into current config construction.
 
 Interactive Brokers legacy mutation fields have constructor or builder replacements:
 
@@ -257,9 +255,43 @@ V2 retains writable `instrument_provider` fields on the data and execution clien
 `cache_path` on the provider config. A non‑`None` `dockerized_gateway` is rejected because Python
 v2 does not own the container lifecycle.
 
-V1 types from `nautilus_trader.config` move beside their owning runtime. For example,
-`BacktestRunConfig` comes from `nautilus_trader.backtest` and `PortfolioConfig` from
-`nautilus_trader.portfolio`.
+Core config types remain grouped under `nautilus_trader.config`. Adapter configs move to the
+adapter's public module, such as `nautilus_trader.adapters.databento`.
+
+The core config names change as follows:
+
+| v1 config             | v2 config                  |
+| --------------------- | -------------------------- |
+| `ActorConfig`         | `DataActorConfig`          |
+| `ExecAlgorithmConfig` | `ExecutionAlgorithmConfig` |
+| `ExecEngineConfig`    | `ExecutionEngineConfig`    |
+| `LoggingConfig`       | `LoggerConfig`             |
+| `TradingNodeConfig`   | `LiveNodeConfig`           |
+
+Import the current names from `nautilus_trader.config`. `ControllerConfig` has no
+direct replacement: define controller fields on a `DataActorConfig` subclass, then refer to that
+class through `ImportableControllerConfig`.
+
+The v1 fill, fee, latency, and simulation‑module config and factory wrappers are also removed.
+Construct the current model or module directly, such as `ProbabilisticFillModel`,
+`FixedFeeModel`, `StaticLatencyModel`, or `FXRolloverInterestModule`, and pass it to the backtest
+venue. `SimulationModuleConfig` is therefore no longer a separate Python type.
+
+Three v1 application config exports represent workflows with no current public Python equivalent:
+`DataCatalogConfig`, `DatabaseConfig`, and `StreamingConfig`. Do not substitute a same‑named Rust
+config. In particular, `BacktestNode` does not yet expose the v1 catalog streaming workflow, and
+Python live‑node config cannot select a Redis or SQL backing.
+
+The generic Python APIs under `nautilus_trader.network` have no v2 public Python equivalent:
+`HttpClient`, `HttpMethod`, `HttpResponse`, `SocketClient`, `WebSocketClient`, `SocketConfig`,
+`WebSocketConfig`, `Quota`, network exceptions, and the `http_*` functions. Use adapter‑specific
+APIs for supported venue workflows or the Rust `nautilus-network` crate for custom networking.
+`TransportBackend` remains available from `nautilus_trader.network` only for adapter config
+transport selection.
+
+The v1 `NautilusConfig`, `NautilusKernelConfig`, `ImportableConfig`, config factory classes, and
+encoding and path utilities are not application config objects in the current package. Use the
+concrete configs and registration methods instead.
 
 Use the generated type stubs in `python/nautilus_trader/` as the supported Python contract. Some
 adapter wire DTOs expose extra runtime attributes that are not part of that contract. The following
@@ -270,14 +302,14 @@ them:
 - `KrakenFuturesHttpClient.submit_orders_batch`
 - `KrakenSpotHttpClient.submit_orders_batch`
 
-The [Python v2 examples][python-v2-examples] show current live-node builders, adapter factories,
+The [Rust‑native Python examples][python-v2-examples] show current live-node builders, adapter factories,
 strategies, actors, and data/execution testers.
 
 Python v2 strategies subclass `Strategy` and override lifecycle or data callbacks:
 
 ```python
+from nautilus_trader.config import StrategyConfig
 from nautilus_trader.trading import Strategy
-from nautilus_trader.trading import StrategyConfig
 
 
 class MyStrategyConfig(StrategyConfig):
@@ -435,8 +467,8 @@ only its custom attributes. Keep `**_kwargs` so the subclass accepts the base ke
 constructor ignores other unmatched keywords, so validate optional custom inputs in `__init__`.
 
 ```python
+from nautilus_trader.config import ExecutionAlgorithmConfig
 from nautilus_trader.model import ExecAlgorithmId
-from nautilus_trader.trading import ExecutionAlgorithmConfig
 
 
 class RoutedAlgorithmConfig(ExecutionAlgorithmConfig):
@@ -484,7 +516,6 @@ Do not assume that a v1 adapter config field also exists on its v2 Rust config.
 
 Account for these differences from v1:
 
-- Custom data flows as native `CustomData` without the v1 wrapper semantics.
 - v2 caches `OptionGreeks` for option fee calculation; this extends v1.
 - `Bar.is_revision` is not exposed on the v2 Python surface. Do not depend on it during migration.
 - A direct `Position.apply` fill that crosses zero resets the open entry price to the flipping fill.
@@ -515,27 +546,33 @@ These gaps can affect migration but do not block supported cutover workflows:
 
 - Python request callbacks do not provide v1 joined-response, pending-request cleanup, or late and
   duplicate delivery convenience behavior.
-- Python cannot inject Redis cache databases or external message-bus backing factories into
-  `LiveNode`; Rust builders still expose those backings.
-- SQL cache position and synthetic loads, actor and strategy state persistence, and heartbeat remain
-  incomplete. Redis backing is available through Rust builders, but Python `LiveNode` configuration
-  cannot select it.
+- Python v2 accepts built‑in external message‑bus factory classes such as
+  `RedisMessageBusFactory`, but arbitrary Python factory classes remain unsupported. V1
+  `MessageBusConfig(database=DatabaseConfig(...), external_streams=[...])` maps to the builder calls
+  `LiveNodeBuilder.with_msgbus_config(...)` and
+  `LiveNodeBuilder.with_external_msgbus_factory(RedisMessageBusFactory(...))`. See
+  [live message‑bus configuration][live-message-bus-config].
+- Python cannot inject Redis cache databases into `LiveNode`; Rust APIs still expose those
+  backings.
+- SQL cache position and synthetic loads, actor and strategy state persistence, and cache heartbeat
+  remain incomplete.
 - External message-bus publishing of serialized order and position snapshots remains deferred.
 - V2 `BacktestNode` does not yet support the v1 `StreamingConfig` and `DataCatalogConfig` iterator
   workflow.
 - Instrument-provider filter dictionaries are not a common v2 adapter contract. Hyperliquid v2
   loads its configured instrument universe and does not accept the v1 `instrument_provider` field.
   Check each adapter's Rust/PyO3 config rather than copying v1 provider examples.
-- The published quickstart and backtesting tutorials still use v1 imports and configuration. Use the
-  generated v2 stubs, the [v2 backtest acceptance tests][python-v2-backtest-tests] for backtesting,
-  and [Python v2 examples][python-v2-examples] for live and adapter workflows while those tutorials
-  are ported.
+- The high-level and low-level backtesting tutorials still use v1 imports and configuration. Use
+  the generated v2 stubs, the [v2 backtest acceptance tests][python-v2-backtest-tests] for
+  backtesting, and [Rust‑native Python examples][python-v2-examples] for live and adapter workflows
+  while those tutorials are ported.
 
 The [v2 roadmap][v2-roadmap] tracks the wider post-cutover surface. Release-specific breaking
 changes remain in [RELEASES.md][release-notes].
 
+[live-message-bus-config]: docs/how_to/configure_live_trading.md#messagebus-configuration
 [python-v2-backtest-tests]: python/tests/acceptance/test_backtest.py
-[python-v2-examples]: python/examples/
+[python-v2-examples]: examples/README.md#live-adapter-examples
 [python-v2-strategy-config]: python/tests/strategies/ema_cross.py
 [release-notes]: RELEASES.md
 [v2-roadmap]: https://github.com/nautechsystems/nautilus_trader/issues/4042
